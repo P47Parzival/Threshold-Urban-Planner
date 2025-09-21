@@ -7,7 +7,33 @@
   justify-content: center;
   padding: 2rem;
   position: relative;
-  overflow: hidden;
+  background-attachment: fixed;
+}
+
+/* Ensure body can scroll properly for auth pages */
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar styling for the page */
+body::-webkit-scrollbar {
+  width: 8px;
+}
+
+body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .auth-container::before {
@@ -32,6 +58,8 @@
   max-width: 450px;
   position: relative;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+  margin: auto;
+  max-height: none;
 }
 
 .auth-card::before {
@@ -235,14 +263,47 @@
 @media (max-width: 768px) {
   .auth-container {
     padding: 1rem;
+    align-items: flex-start;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    min-height: auto;
   }
   
   .auth-card {
     padding: 2rem;
     max-width: 100%;
+    margin: 0;
   }
   
   .auth-header h1 {
     font-size: 2rem;
+  }
+}
+
+@media (max-height: 700px) {
+  .auth-container {
+    align-items: flex-start;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    min-height: auto;
+  }
+  
+  .auth-card {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}
+
+/* Ensure scrolling works on all screen sizes */
+@media (max-height: 600px) {
+  .auth-container {
+    display: block;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  
+  .auth-card {
+    margin: 0 auto;
+    margin-bottom: 2rem;
   }
 }
