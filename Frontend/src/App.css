@@ -77,3 +77,23 @@ div[style*="position: fixed; bottom: 16px; right: 16px"],
 div[style*="position: fixed; bottom: 20px; right: 20px"] {
   display: none !important;
 }
+
+/* Clickable overlay for WITNESS THE GROWTH button */
+.witness-growth-overlay {
+  position: absolute;
+  bottom: 45%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 180px;
+  height: 50px;
+  cursor: pointer;
+  z-index: 1001;
+  background: transparent;
+  border-radius: 25px;
+  transition: all 0.3s ease;
+}
+
+.witness-growth-overlay:hover {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+}
