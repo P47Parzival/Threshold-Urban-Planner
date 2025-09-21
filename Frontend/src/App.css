@@ -1,0 +1,79 @@
+#root {
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Spline container with logo hiding techniques */
+.spline-container {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Method 1: CSS Overlay to cover the Spline logo area */
+.spline-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 120px;
+  height: 60px;
+  background: linear-gradient(135deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.9) 100%);
+  backdrop-filter: blur(10px);
+  z-index: 999;
+  pointer-events: none;
+}
+
+/* Method 2: Scale the Spline canvas to push logo out of view */
+.spline-container canvas {
+  transform: scale(1.05);
+  transform-origin: center center;
+  width: 105% !important;
+  height: 105% !important;
+  position: absolute;
+  top: -2.5%;
+  left: -2.5%;
+}
+
+/* Method 3: Alternative overlay with custom background matching your scene */
+.spline-container::before {
+  content: '';
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 100px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 8px;
+  z-index: 1000;
+  pointer-events: none;
+  backdrop-filter: blur(5px);
+}
+
+/* Hide any iframes or embedded content logos */
+.spline-container iframe {
+  transform: scale(1.05);
+  transform-origin: center;
+  width: 105% !important;
+  height: 105% !important;
+  position: absolute;
+  top: -2.5%;
+  left: -2.5%;
+}
+
+/* Target Spline specific elements if they have identifiable classes */
+div[class*="spline"] div[style*="position: absolute"][style*="bottom"][style*="right"] {
+  display: none !important;
+}
+
+/* Hide elements positioned in bottom-right corner */
+div[style*="position: absolute; bottom: 16px; right: 16px"],
+div[style*="position: absolute; bottom: 20px; right: 20px"],
+div[style*="position: fixed; bottom: 16px; right: 16px"],
+div[style*="position: fixed; bottom: 20px; right: 20px"] {
+  display: none !important;
+}
