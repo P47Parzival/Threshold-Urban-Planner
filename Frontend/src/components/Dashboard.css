@@ -16,6 +16,41 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Tab navigation */
+.nav-tabs {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 8px;
+  position: relative;
+}
+
+.tab-btn:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
 .nav-brand h2 {
   font-size: 1.5rem;
   font-weight: 300;
@@ -262,6 +297,169 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+.action-btn.danger {
+  background: rgba(255, 99, 71, 0.1);
+  border-color: rgba(255, 99, 71, 0.3);
+  color: #ff6347;
+}
+
+.action-btn.danger:hover {
+  background: rgba(255, 99, 71, 0.2);
+  border-color: rgba(255, 99, 71, 0.5);
+}
+
+/* Settings specific styles */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.setting-item label {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex: 1;
+}
+
+.setting-select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: #ffffff;
+  font-size: 0.9rem;
+  min-width: 120px;
+}
+
+.setting-select:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.setting-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+}
+
+/* Maps specific styles */
+.maps-container {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.map-controls {
+  display: flex;
+  flex-direction: column;
+}
+
+.map-wrapper {
+  height: 600px;
+  border-radius: 15px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Custom map markers */
+.map-marker {
+  position: relative;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+}
+
+.marker-pin {
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.8) 100%);
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  position: relative;
+}
+
+.marker-pin::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background: #0c0c0c;
+  border-radius: 50%;
+}
+
+.marker-text {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.map-marker:hover .marker-text {
+  opacity: 1;
+}
+
+/* Legend styles */
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.legend-color.urban-center {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+}
+
+.legend-color.development-zone {
+  background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+}
+
+.legend-color.construction-site {
+  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+}
+
 /* Loading state */
 .loading {
   display: flex;
@@ -282,10 +480,22 @@
   
   .dashboard-nav {
     padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
   }
   
   .nav-brand h2 {
     font-size: 1.2rem;
+  }
+  
+  .nav-tabs {
+    flex: 1;
+    max-width: 300px;
+  }
+  
+  .tab-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
   }
   
   .welcome-section h1 {
@@ -305,5 +515,52 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+  }
+  
+  .setting-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .setting-select {
+    min-width: 100%;
+  }
+  
+  .maps-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .map-wrapper {
+    height: 400px;
+  }
+  
+  .nav-tabs {
+    order: 2;
+  }
+  
+  .logout-btn {
+    order: 3;
+  }
+}
+
+@media (max-width: 1024px) and (min-width: 769px) {
+  .dashboard-nav {
+    padding: 1.2rem 1.5rem;
+  }
+  
+  .tab-btn {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.85rem;
+  }
+  
+  .maps-container {
+    grid-template-columns: 280px 1fr;
+    gap: 1.5rem;
+  }
+  
+  .map-wrapper {
+    height: 500px;
   }
 }

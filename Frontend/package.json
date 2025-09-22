@@ -12,6 +12,7 @@
   "dependencies": {
     "@splinetool/react-spline": "^4.1.0",
     "@tailwindcss/vite": "^4.1.13",
+    "google-map-react": "^2.2.5",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^6.28.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
+    "@types/node": "^24.5.2",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.2",
