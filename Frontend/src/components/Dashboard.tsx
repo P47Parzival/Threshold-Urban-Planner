@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-// @ts-ignore - google-map-react types may not be available
-import GoogleMapReact from 'google-map-react';
+import Maps from './Maps';
 import './Dashboard.css';
 
 interface User {
@@ -12,23 +11,11 @@ interface User {
 
 type TabType = 'dashboard' | 'maps' | 'settings';
 
-interface MapMarkerProps {
-  lat: number;
-  lng: number;
-  text: string;
-}
-
-const MapMarker = ({ text }: MapMarkerProps) => (
-  <div className="map-marker">
-    <div className="marker-pin"></div>
-    <div className="marker-text">{text}</div>
-  </div>
-);
-
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [showFloatingNav, setShowFloatingNav] = useState(false);
 
   useEffect(() => {
     // Get user data from localStorage
@@ -135,169 +122,6 @@ export default function Dashboard() {
     </>
   );
 
-  const renderMapsContent = () => {
-    const defaultProps = {
-      center: {
-        lat: 10.99835602,
-        lng: 77.01502627
-      },
-      zoom: 11
-    };
-
-    const handleApiLoaded = (map: unknown, maps: unknown) => {
-      // use map and maps objects for advanced functionality
-      console.log('Google Maps API loaded', { map, maps });
-    };
-
-    // Get the API key from environment variables (Vite)
-    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
-    if (!googleMapsApiKey) {
-      return (
-        <>
-          <div className="welcome-section">
-            <h1>Urban Growth Maps</h1>
-            <p>Google Maps API key is not configured</p>
-          </div>
-          <div className="dashboard-card">
-            <h3>Configuration Required</h3>
-            <p>Please add your Google Maps API key to the environment variables.</p>
-            <p>Add <code>VITE_GOOGLE_MAPS_API_KEY=your_api_key_here</code> to your .env file</p>
-          </div>
-        </>
-      );
-    }
-
-    return (
-      <>
-        <div className="welcome-section">
-          <h1>Urban Growth Maps</h1>
-          <p>Explore urban development and growth patterns in your area</p>
-        </div>
-
-        <div className="maps-container">
-          <div className="map-controls">
-            <div className="dashboard-card">
-              <h3>Map Controls</h3>
-              <div className="settings-section">
-                <div className="setting-item">
-                  <label>Map Type</label>
-                  <select className="setting-select">
-                    <option value="roadmap">Roadmap</option>
-                    <option value="satellite">Satellite</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="terrain">Terrain</option>
-                  </select>
-                </div>
-                <div className="setting-item">
-                  <label>Show Growth Data</label>
-                  <input type="checkbox" defaultChecked />
-                </div>
-                <div className="setting-item">
-                  <label>Show Projects</label>
-                  <input type="checkbox" defaultChecked />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="map-wrapper">
-            <GoogleMapReact
-              bootstrapURLKeys={{ key: googleMapsApiKey }}
-              defaultCenter={defaultProps.center}
-              defaultZoom={defaultProps.zoom}
-              yesIWantToUseGoogleMapApiInternals
-              onGoogleApiLoaded={({ map, maps }: { map: unknown; maps: unknown }) => handleApiLoaded(map, maps)}
-              options={{
-                styles: [
-                  {
-                    featureType: "all",
-                    elementType: "geometry.fill",
-                    stylers: [{ color: "#242f3e" }]
-                  },
-                  {
-                    featureType: "all",
-                    elementType: "labels.text.fill",
-                    stylers: [{ color: "#746855" }]
-                  },
-                  {
-                    featureType: "all",
-                    elementType: "labels.text.stroke",
-                    stylers: [{ color: "#242f3e" }]
-                  },
-                  {
-                    featureType: "road",
-                    elementType: "geometry",
-                    stylers: [{ color: "#38414e" }]
-                  },
-                  {
-                    featureType: "road.highway",
-                    elementType: "geometry",
-                    stylers: [{ color: "#746855" }]
-                  },
-                  {
-                    featureType: "water",
-                    elementType: "geometry",
-                    stylers: [{ color: "#17263c" }]
-                  }
-                ]
-              }}
-            >
-              <MapMarker
-                lat={10.99835602}
-                lng={77.01502627}
-                text="Urban Growth Center"
-              />
-              <MapMarker
-                lat={11.0168}
-                lng={76.9558}
-                text="Development Zone A"
-              />
-              <MapMarker
-                lat={10.9845}
-                lng={77.0856}
-                text="Construction Site B"
-              />
-            </GoogleMapReact>
-          </div>
-        </div>
-
-        <div className="dashboard-grid" style={{ marginTop: '2rem' }}>
-          <div className="dashboard-card">
-            <h3>Map Legend</h3>
-            <div className="legend-items">
-              <div className="legend-item">
-                <span className="legend-color urban-center"></span>
-                <span>Urban Growth Centers</span>
-              </div>
-              <div className="legend-item">
-                <span className="legend-color development-zone"></span>
-                <span>Development Zones</span>
-              </div>
-              <div className="legend-item">
-                <span className="legend-color construction-site"></span>
-                <span>Construction Sites</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>Quick Stats</h3>
-            <div className="metrics">
-              <div className="metric-item">
-                <span className="metric-value">23</span>
-                <span className="metric-label">Active Projects</span>
-              </div>
-              <div className="metric-item">
-                <span className="metric-value">8</span>
-                <span className="metric-label">Growth Zones</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  };
 
   const renderSettingsContent = () => (
     <>
@@ -387,40 +211,105 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-container">
-      <nav className="dashboard-nav">
-        <div className="nav-brand">
-          <h2>THRESHOLD</h2>
-        </div>
-        
-        <div className="nav-tabs">
-          <button 
-            className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            Dashboard
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'maps' ? 'active' : ''}`}
-            onClick={() => setActiveTab('maps')}
-          >
-            Maps
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-          >
-            Settings
-          </button>
-        </div>
+      {/* Regular navbar - hidden when on maps tab */}
+      {activeTab !== 'maps' && (
+        <nav className="dashboard-nav">
+          <div className="nav-brand">
+            <h2>THRESHOLD</h2>
+          </div>
+          
+          <div className="nav-tabs">
+            <button 
+              className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dashboard')}
+            >
+              Dashboard
+            </button>
+            <button 
+              className="tab-btn"
+              onClick={() => setActiveTab('maps')}
+            >
+              Maps
+            </button>
+            <button 
+              className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              Settings
+            </button>
+          </div>
 
-        <button onClick={handleLogout} className="logout-btn">
-          Logout
-        </button>
-      </nav>
+          <button onClick={handleLogout} className="logout-btn">
+            Logout
+          </button>
+        </nav>
+      )}
 
-      <main className="dashboard-main">
+      {/* Floating navigation for maps tab */}
+      {activeTab === 'maps' && (
+        <>
+          <button 
+            className="floating-nav-toggle"
+            onClick={() => setShowFloatingNav(!showFloatingNav)}
+          >
+            ☰
+          </button>
+          
+          {showFloatingNav && (
+            <div className="floating-nav-overlay">
+              <div className="floating-nav-content">
+                <div className="floating-nav-header">
+                  <h3>THRESHOLD</h3>
+                  <button 
+                    className="floating-nav-close"
+                    onClick={() => setShowFloatingNav(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <div className="floating-nav-tabs">
+                  <button 
+                    className="floating-tab-btn"
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setShowFloatingNav(false);
+                    }}
+                  >
+                    Dashboard
+                  </button>
+                  <button 
+                    className="floating-tab-btn active"
+                    onClick={() => setShowFloatingNav(false)}
+                  >
+                    Maps
+                  </button>
+                  <button 
+                    className="floating-tab-btn"
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setShowFloatingNav(false);
+                    }}
+                  >
+                    Settings
+                  </button>
+                </div>
+                
+                <button 
+                  onClick={handleLogout} 
+                  className="floating-logout-btn"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      <main className={`dashboard-main ${activeTab === 'maps' ? 'dashboard-main-fullscreen' : ''}`}>
         {activeTab === 'dashboard' && renderDashboardContent()}
-        {activeTab === 'maps' && renderMapsContent()}
+        {activeTab === 'maps' && <Maps />}
         {activeTab === 'settings' && renderSettingsContent()}
       </main>
     </div>
