@@ -319,25 +319,79 @@
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.75rem;
 }
 
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: 0.5rem;
   background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .setting-item label {
   color: rgba(255, 255, 255, 0.9);
-  font-size: 0.95rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   flex: 1;
+}
+
+/* Compact settings for map controls */
+.map-controls-overlay .settings-section {
+  gap: 0.5rem;
+}
+
+.map-controls-overlay .setting-item {
+  padding: 0.4rem 0.6rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
+.map-controls-overlay .setting-item label {
+  font-size: 0.7rem;
+  margin: 0;
+}
+
+.map-controls-overlay .setting-select {
+  font-size: 0.7rem;
+  padding: 0.3rem 0.5rem;
+  min-width: 80px;
+}
+
+.map-controls-overlay input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+}
+
+
+/* Date picker styling */
+.date-picker {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  color: #ffffff;
+  font-size: 0.7rem;
+  min-width: 100px;
+  color-scheme: dark;
+}
+
+.date-picker:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Compact date picker for map controls */
+.map-controls-overlay .date-picker {
+  font-size: 0.65rem;
+  padding: 0.25rem 0.4rem;
+  min-width: 90px;
 }
 
 .setting-select {
@@ -428,7 +482,16 @@
   top: 1rem;
   left: 5rem; /* Move right to avoid floating nav toggle */
   z-index: 10;
-  max-width: 280px;
+  max-width: 220px;
+}
+
+.map-controls-overlay .dashboard-card {
+  padding: 1rem !important;
+}
+
+.map-controls-overlay h3 {
+  font-size: 0.9rem !important;
+  margin-bottom: 1rem !important;
 }
 
 /* Map Legend Overlay - Bottom Left */
@@ -458,6 +521,95 @@
   z-index: 10;
   max-width: 500px;
   width: 90%;
+}
+
+/* NASA Data Legend Overlay - Bottom Right */
+.nasa-legend-overlay {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 10;
+  max-width: 280px;
+}
+
+/* Setting dividers */
+.setting-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 1rem 0;
+}
+
+/* Compact dividers for map controls */
+.map-controls-overlay .setting-divider {
+  margin: 0.5rem 0;
+}
+
+/* Radio button styling */
+.setting-item label input[type="radio"] {
+  margin-right: 0.5rem;
+  accent-color: rgba(255, 255, 255, 0.8);
+}
+
+/* NASA Inline Legend */
+.nasa-inline-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+  padding: 0.2rem 0.4rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  width: 100%;
+}
+
+.legend-tech-text {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.6rem;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.02em;
+}
+
+/* NASA legend specific styling */
+.legend-text {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
+}
+
+.legend-description {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.legend-color-bar {
+  height: 8px;
+  width: 60px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  margin-right: 0.3rem;
+  flex-shrink: 0;
+}
+
+.lst-gradient {
+  background: linear-gradient(to right, 
+    #000080 0%,   /* Deep blue - cool */
+    #0000FF 20%,  /* Blue */
+    #00FFFF 40%,  /* Cyan */
+    #FFFF00 60%,  /* Yellow */
+    #FF8000 80%,  /* Orange */
+    #FF0000 100%  /* Red - hot */
+  );
+}
+
+.ndvi-gradient {
+  background: linear-gradient(to right, 
+    #8B4513 0%,   /* Brown - no vegetation */
+    #CD853F 20%,  /* Sandy brown */
+    #FFFF00 40%,  /* Yellow */
+    #ADFF2F 60%,  /* Green yellow */
+    #32CD32 80%,  /* Lime green */
+    #006400 100%  /* Dark green - dense vegetation */
+  );
 }
 
 /* Custom map markers */
@@ -655,6 +807,12 @@
     max-width: calc(50vw - 0.75rem);
   }
   
+  .nasa-legend-overlay {
+    bottom: 3.5rem;
+    right: 0.5rem;
+    max-width: calc(100vw - 1rem);
+  }
+  
   .map-overlay-card {
     padding: 1rem !important;
     font-size: 0.9rem;
@@ -696,7 +854,7 @@
   }
   
   .map-controls-overlay {
-    max-width: 260px;
+    max-width: 200px;
     left: 4.5rem; /* Account for floating nav toggle on tablet */
   }
   
@@ -706,6 +864,10 @@
   
   .map-stats-overlay {
     max-width: 180px;
+  }
+  
+  .nasa-legend-overlay {
+    max-width: 250px;
   }
 }
 
