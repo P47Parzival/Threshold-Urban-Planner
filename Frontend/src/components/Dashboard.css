@@ -394,6 +394,374 @@
   min-width: 90px;
 }
 
+/* AOI and Capture Controls */
+.aoi-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.aoi-btn, .capture-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  color: #ffffff;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.aoi-btn:hover, .capture-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.aoi-btn.active {
+  background: rgba(255, 165, 0, 0.2);
+  border-color: rgba(255, 165, 0, 0.4);
+  color: #ffaa00;
+}
+
+.aoi-btn.selected {
+  background: rgba(0, 255, 0, 0.2);
+  border-color: rgba(0, 255, 0, 0.4);
+  color: #00ff00;
+}
+
+.clear-aoi-btn {
+  background: rgba(255, 99, 71, 0.1);
+  border: 1px solid rgba(255, 99, 71, 0.3);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  color: #ff6347;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.clear-aoi-btn:hover {
+  background: rgba(255, 99, 71, 0.2);
+  border-color: rgba(255, 99, 71, 0.5);
+}
+
+.capture-btn.capturing {
+  background: rgba(255, 0, 0, 0.2);
+  border-color: rgba(255, 0, 0, 0.4);
+  color: #ff4444;
+  cursor: not-allowed;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Timeline Overlay */
+.timeline-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 30%, rgba(0,0,0,0.6) 100%);
+  backdrop-filter: blur(5px);
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.timeline-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* Timeline Date Display */
+.timeline-date-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 120px;
+}
+
+.timeline-interval {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.2rem;
+}
+
+.timeline-current-date {
+  font-size: 0.9rem;
+  color: #ffffff;
+  font-weight: 500;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.05em;
+}
+
+/* Timeline Controls */
+.timeline-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.timeline-nav-btn, .timeline-play-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+}
+
+.timeline-nav-btn {
+  width: 28px;
+  height: 28px;
+}
+
+.timeline-play-btn {
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
+}
+
+.timeline-nav-btn:hover, .timeline-play-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.timeline-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Timeline Slider */
+.timeline-slider-container {
+  flex: 1;
+  position: relative;
+  height: 60px;
+  margin: 0 1rem;
+  min-width: 200px;
+}
+
+.timeline-track {
+  position: relative;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.timeline-markers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.timeline-marker {
+  position: absolute;
+  height: 100%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.timeline-marker.year-marker {
+  background: rgba(255, 255, 255, 0.6);
+  width: 2px;
+}
+
+.timeline-marker.month-marker {
+  background: rgba(255, 255, 255, 0.4);
+  height: 50%;
+}
+
+.timeline-year-label {
+  background: rgba(0, 0, 0, 0.8);
+  color: #ffffff;
+  font-size: 0.6rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 2px;
+  margin-top: 0.2rem;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.timeline-month-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.5rem;
+  margin-top: 0.2rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.timeline-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #0066cc 0%, #0088ff 50%, #00aaff 100%);
+  transition: width 0.3s ease;
+  opacity: 0.8;
+  border-radius: 8px 0 0 8px;
+}
+
+.timeline-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  z-index: 10;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.timeline-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 70px;
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.timeline-slider::-webkit-slider-thumb:hover {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+  transform: scaleY(1.1);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.timeline-slider::-moz-range-thumb {
+  width: 20px;
+  height: 70px;
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.timeline-slider::-moz-range-track {
+  background: transparent;
+  height: 100%;
+}
+
+/* Timeline Info */
+.timeline-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 120px;
+  text-align: right;
+}
+
+.timeline-range {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.2rem;
+}
+
+.timeline-position {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'Courier New', monospace;
+}
+
+/* Responsive adjustments for larger screens */
+@media (min-width: 1024px) {
+  .timeline-container {
+    gap: 1.5rem;
+  }
+  
+  .timeline-slider-container {
+    margin: 0 2rem;
+  }
+  
+  /* Hide overlapping month labels on larger screens to reduce congestion */
+  .timeline-marker.month-marker:not(.year-marker) {
+    display: none;
+  }
+  
+  /* Show fewer year markers on very wide screens */
+  @media (min-width: 1400px) {
+    .timeline-marker.year-marker:nth-child(2n) {
+      opacity: 0.3;
+    }
+    
+    .timeline-marker.year-marker:nth-child(2n) .timeline-year-label {
+      display: none;
+    }
+  }
+}
+
+/* Additional responsive adjustments */
+@media (min-width: 1600px) {
+  .timeline-container {
+    max-width: 1600px;
+    gap: 2rem;
+  }
+  
+  .timeline-slider-container {
+    margin: 0 2.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .timeline-container {
+    grid-template-columns: auto 1fr auto;
+    gap: 0.5rem;
+  }
+  
+  .timeline-info {
+    display: none;
+  }
+  
+  .timeline-slider-container {
+    margin: 0 0.5rem;
+  }
+  
+  .timeline-date-display {
+    min-width: 80px;
+  }
+  
+  .timeline-current-date {
+    font-size: 0.8rem;
+  }
+}
+
 .setting-select {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -449,6 +817,15 @@
 /* When navbar is hidden, use full viewport height */
 .dashboard-main-fullscreen .fullscreen-map-container {
   height: 100vh;
+}
+
+/* AOI Selection Cursor */
+.fullscreen-map-container.aoi-selecting {
+  cursor: crosshair !important;
+}
+
+.fullscreen-map-container.aoi-selecting * {
+  cursor: crosshair !important;
 }
 
 .map-wrapper-fullscreen {
@@ -869,6 +1246,16 @@
   .nasa-legend-overlay {
     max-width: 250px;
   }
+  
+  /* Tablet Timeline Adjustments */
+  .timeline-container {
+    grid-template-columns: auto auto 1fr auto;
+    gap: 0.8rem;
+  }
+  
+  .timeline-slider-container {
+    margin: 0 0.5rem;
+  }
 }
 
 /* Floating Navigation for Maps Tab */
@@ -1067,5 +1454,37 @@
   .floating-logout-btn {
     padding: 0.75rem 1rem;
     font-size: 0.8rem;
+  }
+  
+  /* Mobile Timeline Adjustments */
+  .timeline-overlay {
+    padding: 0.5rem;
+  }
+  
+  .timeline-container {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 0.5rem;
+    text-align: center;
+  }
+  
+  .timeline-date-display {
+    align-items: center;
+  }
+  
+  .timeline-slider-container {
+    margin: 0;
+    order: 2;
+  }
+  
+  .timeline-info {
+    align-items: center;
+    text-align: center;
+    order: 3;
+  }
+  
+  .timeline-controls {
+    justify-content: center;
+    order: 1;
   }
 }
