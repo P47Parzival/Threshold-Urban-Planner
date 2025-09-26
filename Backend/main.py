@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import auth, users
+from api.routes import auth, users, population
 from database.connection import connect_to_database, close_database_connection
 import uvicorn
 
@@ -31,6 +31,7 @@ async def shutdown_event():
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(population.router, prefix="/api/population", tags=["population"])
 
 @app.get("/")
 async def root():

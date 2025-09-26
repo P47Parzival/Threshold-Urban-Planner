@@ -26,6 +26,8 @@ export default function Maps() {
   const [drawingManager, setDrawingManager] = useState<any>(null);
   const [aoiRectangle, setAoiRectangle] = useState<any>(null);
   const [containerWidth, setContainerWidth] = useState<number>(1000);
+  const [, setPopulationData] = useState<any>(null);
+  const [populationOverlays, setPopulationOverlays] = useState<any[]>([]);
   
   const defaultProps = {
     center: {
@@ -138,14 +140,220 @@ export default function Maps() {
       setCurrentOverlay(null);
     }
 
-    // Add new overlay if layer is selected
-    if (layer) {
+    // Clear population overlays if switching away from population layer
+    if (layer !== 'population' && populationOverlays.length > 0) {
+      populationOverlays.forEach(overlay => overlay.setMap(null));
+      setPopulationOverlays([]);
+    }
+
+    // Add new overlay based on layer type
+    if (layer === 'population') {
+      loadPopulationData();
+    } else if (layer) {
       const overlay = createNasaOverlay(mapInstance, mapsInstance, layer);
       if (overlay) {
         mapInstance.overlayMapTypes.push(overlay);
         setCurrentOverlay(overlay);
       }
     }
+  };
+
+  // Function to load population data from backend
+  const loadPopulationData = async () => {
+    try {
+      console.log('🔄 Loading population data...');
+      const response = await fetch('http://localhost:8000/api/population/density?max_features=500');
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Backend response error:', response.status, errorText);
+        throw new Error(`Backend error (${response.status}): ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Population data loaded:', data.metadata);
+      
+      if (data.features && data.features.length > 0) {
+        // Get geographic bounds from backend metadata (after CRS correction)
+        const geoBounds = data.metadata?.geographic_bounds;
+        
+        if (geoBounds) {
+          console.log('🌍 Geographic bounds from backend:', geoBounds);
+          console.log(`📍 Data center: ${geoBounds.center.longitude.toFixed(2)}, ${geoBounds.center.latitude.toFixed(2)}`);
+          
+          // Auto-zoom to where the data actually is
+          if (mapInstance) {
+            console.log('🎯 Auto-zooming to data location...');
+            mapInstance.setCenter({ 
+              lat: geoBounds.center.latitude, 
+              lng: geoBounds.center.longitude 
+            });
+            
+            // Set appropriate zoom level based on data spread
+            const latSpread = geoBounds.max_latitude - geoBounds.min_latitude;
+            const lngSpread = geoBounds.max_longitude - geoBounds.min_longitude;
+            const maxSpread = Math.max(latSpread, lngSpread);
+            
+            let zoomLevel = 10; // Default
+            if (maxSpread > 50) zoomLevel = 4;      // Continental
+            else if (maxSpread > 20) zoomLevel = 6;  // Country
+            else if (maxSpread > 5) zoomLevel = 8;   // Regional
+            else if (maxSpread > 1) zoomLevel = 10;  // City
+            else zoomLevel = 12;                     // Local
+            
+            mapInstance.setZoom(zoomLevel);
+            console.log(`📊 Set zoom to ${zoomLevel} (spread: ${maxSpread.toFixed(2)}°)`);
+          }
+        } else {
+          console.warn('⚠️ No geographic bounds provided by backend');
+        }
+        
+        setPopulationData(data);
+        createPopulationChoropleth(data);
+        console.log(`🗺️ Created choropleth with ${data.features.length} features`);
+        
+        const regionName = geoBounds ? 
+          `Lng: ${geoBounds.min_longitude.toFixed(2)} to ${geoBounds.max_longitude.toFixed(2)}, Lat: ${geoBounds.min_latitude.toFixed(2)} to ${geoBounds.max_latitude.toFixed(2)}` : 
+          'Unknown region';
+        
+        alert(`✅ Successfully loaded ${data.features.length} population features!\n\n📍 Data location: ${regionName}\n\n🎯 Map auto-zoomed to data area.`);
+      } else {
+        console.warn('⚠️ No population features found in response');
+        alert('❌ No population data found. The dataset might be empty or corrupted.');
+      }
+    } catch (error) {
+      console.error('❌ Error loading population data:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (errorMessage.includes('Failed to fetch')) {
+        alert('❌ Cannot connect to backend. Please ensure the backend server is running on http://localhost:8000');
+      } else if (errorMessage.includes('Backend error')) {
+        alert(`❌ Backend processing error: ${errorMessage}\n\nThis might be due to the large dataset size. Check the backend console for details.`);
+      } else {
+        alert(`❌ Error loading population data: ${errorMessage}`);
+      }
+    }
+  };
+
+  // Function to load Ahmedabad-specific population data
+  const loadAhmedabadPopulationData = async () => {
+    try {
+      console.log('🏙️ Loading Ahmedabad-specific population data...');
+      const response = await fetch('http://localhost:8000/api/population/density/ahmedabad?max_features=1000');
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Backend response error:', response.status, errorText);
+        throw new Error(`Backend error (${response.status}): ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Ahmedabad population data loaded:', data.metadata);
+      
+      if (data.features && data.features.length > 0) {
+        // Clear existing population overlays first
+        populationOverlays.forEach(overlay => overlay.setMap(null));
+        setPopulationOverlays([]);
+        
+        setPopulationData(data);
+        createPopulationChoropleth(data);
+        console.log(`🏙️ Created Ahmedabad choropleth with ${data.features.length} features`);
+        
+        // Zoom to Ahmedabad region
+        if (mapInstance) {
+          mapInstance.setCenter({ lat: 23.0225, lng: 72.5714 });
+          mapInstance.setZoom(11);
+        }
+        
+        alert(`✅ Successfully loaded ${data.features.length} population features for Ahmedabad region!`);
+      } else {
+        console.warn('⚠️ No population features found in Ahmedabad region');
+        alert('❌ No population data found even in Ahmedabad region. The dataset might not cover India.');
+      }
+    } catch (error) {
+      console.error('❌ Error loading Ahmedabad population data:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      alert(`❌ Error loading Ahmedabad population data: ${errorMessage}`);
+    }
+  };
+
+  // Function to create choropleth map from population data
+  const createPopulationChoropleth = (data: any) => {
+    if (!mapInstance || !mapsInstance || !data.features) return;
+
+    // Clear existing population overlays
+    populationOverlays.forEach(overlay => overlay.setMap(null));
+    const newOverlays: any[] = [];
+
+    // Create color scale for population density
+    const getColor = (density: number) => {
+      if (density > 10000) return '#800026';
+      if (density > 5000) return '#BD0026';
+      if (density > 2000) return '#E31A1C';
+      if (density > 1000) return '#FC4E2A';
+      if (density > 500) return '#FD8D3C';
+      if (density > 200) return '#FEB24C';
+      if (density > 100) return '#FED976';
+      return '#FFEDA0';
+    };
+
+    // Process each feature in the population data
+    console.log(`🔄 Processing ${data.features.length} population features...`);
+    
+    data.features.forEach((feature: any, index: number) => {
+      if (feature.geometry && feature.geometry.type === 'Polygon') {
+        const coordinates = feature.geometry.coordinates[0].map((coord: number[]) => ({
+          lat: coord[1],
+          lng: coord[0]
+        }));
+
+        const density = feature.properties.population_density || 0;
+        const color = getColor(density);
+
+        // Debug: Log first few features
+        if (index < 3) {
+          console.log(`📍 Feature ${index + 1}:`, {
+            density: density.toFixed(0),
+            color,
+            coordinates: coordinates.slice(0, 2), // First 2 coordinates
+            bounds: {
+              lat: [Math.min(...coordinates.map((c: {lat: number; lng: number}) => c.lat)), Math.max(...coordinates.map((c: {lat: number; lng: number}) => c.lat))],
+              lng: [Math.min(...coordinates.map((c: {lat: number; lng: number}) => c.lng)), Math.max(...coordinates.map((c: {lat: number; lng: number}) => c.lng))]
+            }
+          });
+        }
+
+        const polygon = new mapsInstance.Polygon({
+          paths: coordinates,
+          strokeColor: color,
+          strokeOpacity: 0.8,
+          strokeWeight: 1,
+          fillColor: color,
+          fillOpacity: 0.6,
+        });
+
+        polygon.setMap(mapInstance);
+        newOverlays.push(polygon);
+
+        // Add info window
+        const infoWindow = new mapsInstance.InfoWindow({
+          content: `<div>
+            <h4>Population Density</h4>
+            <p><strong>Density:</strong> ${density.toFixed(0)} people/km²</p>
+            <p><strong>Total Population:</strong> ${(feature.properties.population || 0).toFixed(0)}</p>
+          </div>`
+        });
+
+        polygon.addListener('click', (event: any) => {
+          infoWindow.setPosition(event.latLng);
+          infoWindow.open(mapInstance);
+        });
+      }
+    });
+
+    setPopulationOverlays(newOverlays);
   };
 
   const handleApiLoaded = (map: unknown, maps: unknown) => {
@@ -478,6 +686,24 @@ export default function Maps() {
                 <div className="nasa-inline-legend">
                   <span className="legend-color-bar ndvi-gradient"></span>
                   <span className="legend-tech-text">-1.0 to +1.0</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="setting-item">
+              <label>
+                <input 
+                  type="radio" 
+                  name="nasa-layer" 
+                  checked={activeNasaLayer === 'population'}
+                  onChange={() => handleNasaLayerChange('population')}
+                />
+                Population
+              </label>
+              {activeNasaLayer === 'population' && (
+                <div className="nasa-inline-legend">
+                  <span className="legend-color-bar population-gradient"></span>
+                  <span className="legend-tech-text">0-10k+ /km²</span>
                 </div>
               )}
             </div>

@@ -6,3 +6,7 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 python-multipart==0.0.6
+geopandas==0.14.1
+shapely
+fiona==1.9.5
+pyproj==3.6.1

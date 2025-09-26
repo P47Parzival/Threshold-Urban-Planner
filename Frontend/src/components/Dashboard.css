@@ -989,6 +989,19 @@
   );
 }
 
+.population-gradient {
+  background: linear-gradient(to right, 
+    #FFEDA0 0%,   /* Light yellow - low density */
+    #FED976 14%,  /* Yellow */
+    #FEB24C 28%,  /* Orange yellow */
+    #FD8D3C 42%,  /* Orange */
+    #FC4E2A 56%,  /* Red orange */
+    #E31A1C 70%,  /* Red */
+    #BD0026 84%,  /* Dark red */
+    #800026 100%  /* Dark maroon - high density */
+  );
+}
+
 /* Custom map markers */
 .map-marker {
   position: relative;
@@ -1255,6 +1268,56 @@
   
   .timeline-slider-container {
     margin: 0 0.5rem;
+  }
+}
+
+/* Large screens - Fix timeline congestion issues */
+@media (min-width: 1025px) {
+  .timeline-container {
+    grid-template-columns: 140px auto 1fr 140px;
+    gap: 1.5rem;
+    max-width: none;
+    padding: 0 2rem;
+  }
+  
+  .timeline-slider-container {
+    margin: 0 1.5rem;
+    min-width: 0; /* Allow shrinking */
+  }
+  
+  .timeline-track {
+    min-height: 60px;
+  }
+  
+  .timeline-slider::-webkit-slider-thumb {
+    width: 24px;
+    height: 75px;
+  }
+  
+  .timeline-date-display {
+    min-width: 140px;
+  }
+  
+  .timeline-info {
+    min-width: 140px;
+  }
+}
+
+/* Extra large screens */
+@media (min-width: 1400px) {
+  .timeline-container {
+    grid-template-columns: 160px auto 1fr 160px;
+    gap: 2rem;
+    padding: 0 3rem;
+  }
+  
+  .timeline-slider-container {
+    margin: 0 2rem;
+  }
+  
+  .timeline-slider::-webkit-slider-thumb {
+    width: 26px;
+    height: 80px;
   }
 }
 
