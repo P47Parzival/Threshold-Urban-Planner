@@ -28,13 +28,13 @@ export default function Maps() {
   const [containerWidth, setContainerWidth] = useState<number>(1000);
   const [, setPopulationData] = useState<any>(null);
   const [populationOverlays, setPopulationOverlays] = useState<any[]>([]);
-  
+
   // Viewport-based loading states
   const [currentViewport, setCurrentViewport] = useState<any>(null);
   const [currentZoom, setCurrentZoom] = useState<number>(10);
   const [isLoadingViewport, setIsLoadingViewport] = useState<boolean>(false);
   const [lastLoadedViewport, setLastLoadedViewport] = useState<any>(null);
-  
+
   const defaultProps = {
     center: {
       lat: 23.218682,
@@ -47,25 +47,25 @@ export default function Maps() {
   const getTimelineMarkers = (dateRange: string[], maxPosition: number, containerWidth: number = 1000): TimelineMarker[] => {
     // Calculate how many pixels each position takes
     const pixelsPerPosition = containerWidth / maxPosition;
-    
+
     // Adjust minimum spacing based on screen size
     let minMarkerSpacing = 40; // Base spacing
     if (containerWidth > 1400) minMarkerSpacing = 30; // More markers on very wide screens
     else if (containerWidth > 1000) minMarkerSpacing = 35; // Moderate spacing on large screens
     else if (containerWidth < 600) minMarkerSpacing = 60; // Fewer markers on small screens
-    
+
     const skipInterval = Math.max(1, Math.floor(minMarkerSpacing / pixelsPerPosition));
-    
+
     const markers: TimelineMarker[] = [];
-    
+
     dateRange.forEach((date: string, index: number) => {
       const dateObj = new Date(date);
       const isYearStart = dateObj.getMonth() === 0 && dateObj.getDate() <= 8;
       const isMonthStart = dateObj.getDate() <= 8;
-      
+
       // Always show year markers, adjust month marker frequency based on available space
       const shouldShowMarker = isYearStart || (isMonthStart && index % skipInterval === 0);
-      
+
       if (shouldShowMarker) {
         markers.push({
           index,
@@ -77,7 +77,7 @@ export default function Maps() {
         });
       }
     });
-    
+
     return markers;
   };
 
@@ -98,7 +98,7 @@ export default function Maps() {
   // NASA GIBS tile URLs
   const getNasaTileUrl = (layer: string) => {
     const baseUrl = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best';
-    
+
     const layerConfigs = {
       lst: {
         name: 'MODIS_Terra_Land_Surface_Temp_Day',
@@ -109,10 +109,10 @@ export default function Maps() {
         level: 'GoogleMapsCompatible_Level9'
       }
     };
-    
+
     const config = layerConfigs[layer as keyof typeof layerConfigs];
     if (!config) return null;
-    
+
     return `${baseUrl}/${config.name}/default/${selectedDate}/${config.level}/{z}/{y}/{x}.png`;
   };
 
@@ -189,21 +189,21 @@ export default function Maps() {
     const latSpan = ne.lat() - sw.lat();
     const lngSpan = ne.lng() - sw.lng();
     const area = latSpan * lngSpan;
-    
+
     console.log(`🔍 Viewport check: area=${area.toFixed(1)}°², zoom=${zoom}`);
-    
+
     // Prevent global viewport loading
     if (area > 50000) {
       console.log('🚫 Viewport too large for loading (global view)');
       return false;
     }
-    
+
     // Require minimum zoom level for loading
     if (zoom < 6) {
       console.log('🚫 Zoom level too low for loading (zoom in more)');
       return false;
     }
-    
+
     return true;
   };
 
@@ -212,18 +212,18 @@ export default function Maps() {
     if (!oldBounds || Math.abs(newZoom - oldZoom) >= 2) {
       return true; // Always reload on significant zoom change
     }
-    
+
     const newNE = newBounds.getNorthEast();
     const newSW = newBounds.getSouthWest();
     const oldNE = oldBounds.getNorthEast();
     const oldSW = oldBounds.getSouthWest();
-    
+
     // Check if viewport moved more than 50% of current view
     const latDiff = Math.abs(newNE.lat() - oldNE.lat()) + Math.abs(newSW.lat() - oldSW.lat());
     const lngDiff = Math.abs(newNE.lng() - oldNE.lng()) + Math.abs(newSW.lng() - oldSW.lng());
     const currentLatSpan = newNE.lat() - newSW.lat();
     const currentLngSpan = newNE.lng() - newSW.lng();
-    
+
     return (latDiff / currentLatSpan > 0.5) || (lngDiff / currentLngSpan > 0.5);
   };
 
@@ -236,49 +236,49 @@ export default function Maps() {
         setIsLoadingViewport(false);
         return;
       }
-      
+
       // Check if we should reload (significant viewport change)
       if (lastLoadedViewport && !hasViewportChangedSignificantly(bounds, lastLoadedViewport.bounds, zoom, lastLoadedViewport.zoom)) {
         console.log('🔄 Viewport change not significant enough, skipping reload');
         return;
       }
-      
+
       setIsLoadingViewport(true);
-      
+
       const ne = bounds.getNorthEast();
       const sw = bounds.getSouthWest();
-      
+
       const north = ne.lat();
       const south = sw.lat();
       const east = ne.lng();
       const west = sw.lng();
-      
+
       console.log(`🗺️ Loading viewport population data: bounds=(${west.toFixed(3)},${south.toFixed(3)},${east.toFixed(3)},${north.toFixed(3)}), zoom=${zoom}`);
-      
+
       const response = await fetch(`http://localhost:8000/api/population/density/viewport?north=${north}&south=${south}&east=${east}&west=${west}&zoom_level=${zoom}`);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Viewport population data error:', response.status, errorText);
         throw new Error(`Backend error (${response.status}): ${errorText}`);
       }
-      
+
       const data = await response.json();
       console.log('✅ Viewport population data loaded:', data.metadata);
-      
+
       if (data.features && data.features.length > 0) {
         // Clear existing population overlays
         populationOverlays.forEach(overlay => overlay.setMap(null));
         setPopulationOverlays([]);
-        
+
         setPopulationData(data);
         createPopulationChoropleth(data);
-        
+
         // Update last loaded viewport
         setLastLoadedViewport({ bounds, zoom });
-        
+
         console.log(`🎯 Loaded ${data.features.length} features for ${data.metadata.viewport?.lod_level || 'unknown'} detail level`);
-        
+
         // Show LOD info to user
         if (data.metadata.viewport) {
           const lodInfo = `📊 Level: ${data.metadata.viewport.lod_level} | Features: ${data.features.length} | Zoom: ${zoom}`;
@@ -291,7 +291,7 @@ export default function Maps() {
     } catch (error) {
       console.error('❌ Error loading viewport population data:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       if (errorMessage.includes('Failed to fetch')) {
         console.warn('⚠️ Cannot connect to backend for viewport data');
       } else {
@@ -307,59 +307,59 @@ export default function Maps() {
     try {
       console.log('🔄 Loading population data...');
       const response = await fetch('http://localhost:8000/api/population/density?max_features=500');
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Backend response error:', response.status, errorText);
         throw new Error(`Backend error (${response.status}): ${errorText}`);
       }
-      
+
       const data = await response.json();
       console.log('✅ Population data loaded:', data.metadata);
-      
+
       if (data.features && data.features.length > 0) {
         // Get geographic bounds from backend metadata (after CRS correction)
         const geoBounds = data.metadata?.geographic_bounds;
-        
+
         if (geoBounds) {
           console.log('🌍 Geographic bounds from backend:', geoBounds);
           console.log(`📍 Data center: ${geoBounds.center.longitude.toFixed(2)}, ${geoBounds.center.latitude.toFixed(2)}`);
-          
+
           // Auto-zoom to where the data actually is
           if (mapInstance) {
             console.log('🎯 Auto-zooming to data location...');
-            mapInstance.setCenter({ 
-              lat: geoBounds.center.latitude, 
-              lng: geoBounds.center.longitude 
+            mapInstance.setCenter({
+              lat: geoBounds.center.latitude,
+              lng: geoBounds.center.longitude
             });
-            
+
             // Set appropriate zoom level based on data spread
             const latSpread = geoBounds.max_latitude - geoBounds.min_latitude;
             const lngSpread = geoBounds.max_longitude - geoBounds.min_longitude;
             const maxSpread = Math.max(latSpread, lngSpread);
-            
+
             let zoomLevel = 10; // Default
             if (maxSpread > 50) zoomLevel = 4;      // Continental
             else if (maxSpread > 20) zoomLevel = 6;  // Country
             else if (maxSpread > 5) zoomLevel = 8;   // Regional
             else if (maxSpread > 1) zoomLevel = 10;  // City
             else zoomLevel = 12;                     // Local
-            
+
             mapInstance.setZoom(zoomLevel);
             console.log(`📊 Set zoom to ${zoomLevel} (spread: ${maxSpread.toFixed(2)}°)`);
           }
         } else {
           console.warn('⚠️ No geographic bounds provided by backend');
         }
-        
+
         setPopulationData(data);
         createPopulationChoropleth(data);
         console.log(`🗺️ Created choropleth with ${data.features.length} features`);
-        
-        const regionName = geoBounds ? 
-          `Lng: ${geoBounds.min_longitude.toFixed(2)} to ${geoBounds.max_longitude.toFixed(2)}, Lat: ${geoBounds.min_latitude.toFixed(2)} to ${geoBounds.max_latitude.toFixed(2)}` : 
+
+        const regionName = geoBounds ?
+          `Lng: ${geoBounds.min_longitude.toFixed(2)} to ${geoBounds.max_longitude.toFixed(2)}, Lat: ${geoBounds.min_latitude.toFixed(2)} to ${geoBounds.max_latitude.toFixed(2)}` :
           'Unknown region';
-        
+
         alert(`✅ Successfully loaded ${data.features.length} population features!\n\n📍 Data location: ${regionName}\n\n🎯 Map auto-zoomed to data area.`);
       } else {
         console.warn('⚠️ No population features found in response');
@@ -367,9 +367,9 @@ export default function Maps() {
       }
     } catch (error) {
       console.error('❌ Error loading population data:', error);
-      
+
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       if (errorMessage.includes('Failed to fetch')) {
         alert('❌ Cannot connect to backend. Please ensure the backend server is running on http://localhost:8000');
       } else if (errorMessage.includes('Backend error')) {
@@ -385,31 +385,31 @@ export default function Maps() {
     try {
       console.log('🏙️ Loading Ahmedabad-specific population data...');
       const response = await fetch('http://localhost:8000/api/population/density/ahmedabad?max_features=1000');
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Backend response error:', response.status, errorText);
         throw new Error(`Backend error (${response.status}): ${errorText}`);
       }
-      
+
       const data = await response.json();
       console.log('✅ Ahmedabad population data loaded:', data.metadata);
-      
+
       if (data.features && data.features.length > 0) {
         // Clear existing population overlays first
         populationOverlays.forEach(overlay => overlay.setMap(null));
         setPopulationOverlays([]);
-        
+
         setPopulationData(data);
         createPopulationChoropleth(data);
         console.log(`🏙️ Created Ahmedabad choropleth with ${data.features.length} features`);
-        
+
         // Zoom to Ahmedabad region
         if (mapInstance) {
           mapInstance.setCenter({ lat: 23.0225, lng: 72.5714 });
           mapInstance.setZoom(11);
         }
-        
+
         alert(`✅ Successfully loaded ${data.features.length} population features for Ahmedabad region!`);
       } else {
         console.warn('⚠️ No population features found in Ahmedabad region');
@@ -417,7 +417,7 @@ export default function Maps() {
       }
     } catch (error) {
       console.error('❌ Error loading Ahmedabad population data:', error);
-      
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       alert(`❌ Error loading Ahmedabad population data: ${errorMessage}`);
     }
@@ -445,7 +445,7 @@ export default function Maps() {
 
     // Process each feature in the population data
     console.log(`🔄 Processing ${data.features.length} population features...`);
-    
+
     data.features.forEach((feature: any, index: number) => {
       if (feature.geometry && feature.geometry.type === 'Polygon') {
         const coordinates = feature.geometry.coordinates[0].map((coord: number[]) => ({
@@ -463,8 +463,8 @@ export default function Maps() {
             color,
             coordinates: coordinates.slice(0, 2), // First 2 coordinates
             bounds: {
-              lat: [Math.min(...coordinates.map((c: {lat: number; lng: number}) => c.lat)), Math.max(...coordinates.map((c: {lat: number; lng: number}) => c.lat))],
-              lng: [Math.min(...coordinates.map((c: {lat: number; lng: number}) => c.lng)), Math.max(...coordinates.map((c: {lat: number; lng: number}) => c.lng))]
+              lat: [Math.min(...coordinates.map((c: { lat: number; lng: number }) => c.lat)), Math.max(...coordinates.map((c: { lat: number; lng: number }) => c.lat))],
+              lng: [Math.min(...coordinates.map((c: { lat: number; lng: number }) => c.lng)), Math.max(...coordinates.map((c: { lat: number; lng: number }) => c.lng))]
             }
           });
         }
@@ -483,11 +483,11 @@ export default function Maps() {
 
         // Add info window
         const infoWindow = new mapsInstance.InfoWindow({
-          content: `<div>
-            <h4>Population Density</h4>
-            <p><strong>Density:</strong> ${density.toFixed(0)} people/km²</p>
-            <p><strong>Total Population:</strong> ${(feature.properties.population || 0).toFixed(0)}</p>
-          </div>`
+          content: `<div style="color: #ef4444;">
+          <h4 style="margin: 0 0 8px 0; font-weight: bold;">Population Density</h4>
+          <p style="margin: 4px 0;"><strong>Density:</strong> ${density.toFixed(0)} people/km²</p>
+          <p style="margin: 4px 0;"><strong>Total Population:</strong> ${(feature.properties.population || 0).toFixed(0)}</p>
+        </div>`
         });
 
         polygon.addListener('click', (event: any) => {
@@ -504,7 +504,7 @@ export default function Maps() {
     console.log('Google Maps API loaded', { map, maps });
     setMapInstance(map);
     setMapsInstance(maps);
-    
+
     // Initialize Drawing Manager
     const drawingMgr = new (maps as any).drawing.DrawingManager({
       drawingMode: null,
@@ -519,49 +519,49 @@ export default function Maps() {
         draggable: true,
       },
     });
-    
+
     drawingMgr.setMap(map);
     setDrawingManager(drawingMgr);
-    
+
     // Listen for rectangle complete event
     (maps as any).event.addListener(drawingMgr, 'rectanglecomplete', (rectangle: any) => {
       // Remove previous AOI rectangle if exists
       if (aoiRectangle) {
         aoiRectangle.setMap(null);
       }
-      
+
       setAoiRectangle(rectangle);
       const bounds = rectangle.getBounds();
       setAoiBounds(bounds);
-      
+
       // Stop drawing mode
       drawingMgr.setDrawingMode(null);
       setIsSelectingAOI(false);
-      
+
       console.log('AOI selected:', bounds.toJSON());
     });
-    
+
     // Add viewport change listeners for dynamic loading
     (maps as any).event.addListener(map, 'bounds_changed', () => {
       if (map) {
         const bounds = (map as any).getBounds();
         const zoom = (map as any).getZoom();
-        
+
         setCurrentViewport(bounds);
         setCurrentZoom(zoom);
-        
+
         // Debounced viewport loading for population layer (with suitability check)
         if (activeNasaLayer === 'population' && isViewportSuitableForLoading(bounds, zoom)) {
           debouncedLoadViewportPopulation(bounds, zoom);
         }
       }
     });
-    
+
     (maps as any).event.addListener(map, 'zoom_changed', () => {
       if (map) {
         const zoom = (map as any).getZoom();
         setCurrentZoom(zoom);
-        
+
         // Reload population data if zoom level changed significantly and population layer is active
         if (activeNasaLayer === 'population') {
           const bounds = (map as any).getBounds();
@@ -571,7 +571,7 @@ export default function Maps() {
         }
       }
     });
-    
+
     // Initialize with LST layer
     setTimeout(() => {
       if (activeNasaLayer) {
@@ -603,7 +603,7 @@ export default function Maps() {
     const startDate = new Date('2021-01-01');
     const endDate = new Date('2025-12-31');
     const currentDate = new Date(startDate);
-    
+
     while (currentDate <= endDate) {
       dates.push(new Date(currentDate).toISOString().split('T')[0]);
       currentDate.setDate(currentDate.getDate() + 8); // 8-day intervals for MODIS data
@@ -638,17 +638,17 @@ export default function Maps() {
 
   const formatDisplayDate = (date: string): string => {
     const d = new Date(date);
-    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 
-                   'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     return `${d.getFullYear()} ${months[d.getMonth()]} ${d.getDate().toString().padStart(2, '0')}`;
   };
 
   const handleAOISelect = () => {
     if (!drawingManager) return;
-    
+
     const newSelectionState = !isSelectingAOI;
     setIsSelectingAOI(newSelectionState);
-    
+
     if (newSelectionState) {
       // Enable rectangle drawing mode
       drawingManager.setDrawingMode(mapsInstance.drawing.OverlayType.RECTANGLE);
@@ -673,20 +673,20 @@ export default function Maps() {
       alert('Please select an Area of Interest and a NASA layer first');
       return;
     }
-    
+
     setIsCapturing(true);
-    
+
     try {
       // This would implement the GIF capture logic
       console.log('Starting GIF capture for AOI:', aoiBounds);
       console.log('Date range:', dateRange[0], 'to', dateRange[maxPosition]);
-      
+
       // Simulate capture process
       setTimeout(() => {
         setIsCapturing(false);
         alert('GIF capture completed! (This is a simulation)');
       }, 3000);
-      
+
     } catch (error) {
       console.error('GIF capture failed:', error);
       setIsCapturing(false);
@@ -735,7 +735,7 @@ export default function Maps() {
     <div className={`fullscreen-map-container ${isSelectingAOI ? 'aoi-selecting' : ''}`}>
       <div className="map-wrapper-fullscreen">
         <GoogleMapReact
-          bootstrapURLKeys={{ 
+          bootstrapURLKeys={{
             key: googleMapsApiKey,
             libraries: ['drawing']
           }}
@@ -795,31 +795,31 @@ export default function Maps() {
                 <option value="terrain" className='text-black'>Terrain</option>
               </select>
             </div>
-            
+
             <div className="setting-divider"></div>
-            
+
             <div className="setting-item">
               <label>NASA Satellite Data</label>
             </div>
-            
+
             <div className="setting-item">
               <label>AOI & Capture</label>
               <div className="aoi-controls">
-                <button 
+                <button
                   className={`aoi-btn ${isSelectingAOI ? 'active' : aoiBounds ? 'selected' : ''}`}
                   onClick={handleAOISelect}
                 >
                   {isSelectingAOI ? 'Drawing...' : aoiBounds ? '✓ AOI Set' : 'Select AOI'}
                 </button>
                 {aoiBounds && (
-                  <button 
+                  <button
                     className="clear-aoi-btn"
                     onClick={clearAOI}
                   >
                     Clear AOI
                   </button>
                 )}
-                <button 
+                <button
                   className={`capture-btn ${isCapturing ? 'capturing' : ''}`}
                   onClick={handleCaptureGIF}
                   disabled={isCapturing || !aoiBounds}
@@ -828,12 +828,12 @@ export default function Maps() {
                 </button>
               </div>
             </div>
-            
+
             <div className="setting-item">
               <label>
-                <input 
-                  type="radio" 
-                  name="nasa-layer" 
+                <input
+                  type="radio"
+                  name="nasa-layer"
                   checked={activeNasaLayer === 'lst'}
                   onChange={() => handleNasaLayerChange('lst')}
                 />
@@ -846,12 +846,12 @@ export default function Maps() {
                 </div>
               )}
             </div>
-            
+
             <div className="setting-item">
               <label>
-                <input 
-                  type="radio" 
-                  name="nasa-layer" 
+                <input
+                  type="radio"
+                  name="nasa-layer"
                   checked={activeNasaLayer === 'ndvi'}
                   onChange={() => handleNasaLayerChange('ndvi')}
                 />
@@ -864,12 +864,12 @@ export default function Maps() {
                 </div>
               )}
             </div>
-            
+
             <div className="setting-item">
               <label>
-                <input 
-                  type="radio" 
-                  name="nasa-layer" 
+                <input
+                  type="radio"
+                  name="nasa-layer"
                   checked={activeNasaLayer === 'population'}
                   onChange={() => handleNasaLayerChange('population')}
                 />
@@ -894,7 +894,7 @@ export default function Maps() {
                     </div>
                     {currentZoom < 6 && (
                       <div className="viewport-warning">
-                        <span style={{color: '#ffa500', fontSize: '10px'}}>⚠️ Zoom in to load data</span>
+                        <span style={{ color: '#ffa500', fontSize: '10px' }}>⚠️ Zoom in to load data</span>
                       </div>
                     )}
                     {currentViewport && (() => {
@@ -903,7 +903,7 @@ export default function Maps() {
                       const area = (ne.lat() - sw.lat()) * (ne.lng() - sw.lng());
                       return area > 50000 ? (
                         <div className="viewport-warning">
-                          <span style={{color: '#ff6b6b', fontSize: '10px'}}>🚫 Area too large</span>
+                          <span style={{ color: '#ff6b6b', fontSize: '10px' }}>🚫 Area too large</span>
                         </div>
                       ) : null;
                     })()}
@@ -911,18 +911,18 @@ export default function Maps() {
                 </>
               )}
             </div>
-            
+
             <div className="setting-item">
               <label>
-                <input 
-                  type="radio" 
-                  name="nasa-layer" 
+                <input
+                  type="radio"
+                  name="nasa-layer"
                   checked={activeNasaLayer === null}
                   onChange={() => handleNasaLayerChange(null)}
                 />
                 None
               </label>
-            </div>  
+            </div>
           </div>
         </div>
       </div>
@@ -935,7 +935,7 @@ export default function Maps() {
             <span className="timeline-interval">8 DAYS</span>
             <span className="timeline-current-date">{formatDisplayDate(selectedDate)}</span>
           </div>
-          
+
           {/* Timeline Controls */}
           <div className="timeline-controls">
             <button className="timeline-nav-btn" onClick={handlePrevDate} disabled={timelinePosition === 0}>
@@ -948,15 +948,15 @@ export default function Maps() {
               ▶
             </button>
           </div>
-          
+
           {/* Timeline Slider */}
           <div className="timeline-slider-container">
             <div className="timeline-track">
               {/* Timeline markers with improved logic */}
               <div className="timeline-markers">
                 {getTimelineMarkers(dateRange, maxPosition, containerWidth).map((marker: TimelineMarker) => (
-                  <div 
-                    key={marker.index} 
+                  <div
+                    key={marker.index}
                     className={`timeline-marker ${marker.isYearStart ? 'year-marker' : marker.isMonthStart ? 'month-marker' : ''}`}
                     style={{ left: `${marker.position}%` }}
                   >
@@ -971,22 +971,22 @@ export default function Maps() {
                   </div>
                 ))}
               </div>
-              
+
               {/* Progress bar */}
               <div className="timeline-progress" style={{ width: `${(timelinePosition / maxPosition) * 100}%` }}></div>
-              
+
               {/* Slider thumb */}
-              <input 
-                type="range" 
-                min="0" 
-                max={maxPosition} 
-                value={timelinePosition} 
+              <input
+                type="range"
+                min="0"
+                max={maxPosition}
+                value={timelinePosition}
                 onChange={(e) => handleTimelineChange(parseInt(e.target.value))}
                 className="timeline-slider"
               />
             </div>
           </div>
-          
+
           {/* Timeline Info */}
           <div className="timeline-info">
             <span className="timeline-range">
