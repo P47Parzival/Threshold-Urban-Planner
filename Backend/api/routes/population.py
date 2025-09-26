@@ -7,6 +7,7 @@ import json
 import time
 from pathlib import Path
 from shapely.geometry import box
+from pyproj import Transformer
 
 router = APIRouter()
 
@@ -61,9 +62,28 @@ async def get_population_density(
         try:
             if bbox_geom:
                 print("📖 Reading data with bounding box filter...")
-                # First try with geopandas bbox parameter
+                
+                # First, peek at the file's CRS to determine if we need to reproject the bbox
+                print("🔍 Checking file CRS for bbox reprojection...")
+                temp_gdf = gpd.read_file(POPULATION_DATA_PATH, rows=1)
+                file_crs = temp_gdf.crs
+                print(f"📍 File CRS: {file_crs}")
+                
+                # Reproject bbox to match file CRS if needed (like test.py does)
+                if file_crs and str(file_crs) != 'EPSG:4326':
+                    print(f"🔄 Reprojecting bbox from EPSG:4326 to {file_crs} for filtering...")
+                    transformer = Transformer.from_crs("EPSG:4326", file_crs, always_xy=True)
+                    min_lng_proj, min_lat_proj = transformer.transform(min_lng, min_lat)
+                    max_lng_proj, max_lat_proj = transformer.transform(max_lng, max_lat)
+                    bbox_proj = (min_lng_proj, min_lat_proj, max_lng_proj, max_lat_proj)
+                    print(f"📦 Reprojected bbox: ({min_lng_proj:.2f}, {min_lat_proj:.2f}) to ({max_lng_proj:.2f}, {max_lat_proj:.2f})")
+                else:
+                    bbox_proj = (min_lng, min_lat, max_lng, max_lat)
+                    print("📦 Using original bbox (no reprojection needed)")
+                
+                # Try reading with the correctly projected bbox
                 try:
-                    gdf = gpd.read_file(POPULATION_DATA_PATH, bbox=(min_lng, min_lat, max_lng, max_lat))
+                    gdf = gpd.read_file(POPULATION_DATA_PATH, bbox=bbox_proj)
                     print(f"✅ Loaded {len(gdf)} features within bounding box")
                 except Exception as bbox_error:
                     print(f"⚠️ Direct bbox read failed: {bbox_error}")
@@ -71,9 +91,16 @@ async def get_population_density(
                     # Read a larger sample and then filter
                     gdf = gpd.read_file(POPULATION_DATA_PATH, rows=max_features * 10)
                     print(f"✅ Loaded {len(gdf)} sample features")
+                    
+                    # Create bbox geometry in the file's CRS for intersection
+                    if file_crs and str(file_crs) != 'EPSG:4326':
+                        bbox_geom_proj = box(min_lng_proj, min_lat_proj, max_lng_proj, max_lat_proj)
+                    else:
+                        bbox_geom_proj = bbox_geom
+                    
                     # Apply bounding box filter
                     print("🔍 Filtering by bounding box...")
-                    gdf = gdf[gdf.geometry.intersects(bbox_geom)]
+                    gdf = gdf[gdf.geometry.intersects(bbox_geom_proj)]
                     print(f"✅ Filtered to {len(gdf)} features")
             else:
                 print(f"📖 Reading first {max_features} features for testing...")
@@ -396,3 +423,139 @@ async def get_population_bounds():
             status_code=500,
             detail=f"Error getting bounds: {str(e)}"
         )
+
+@router.get("/density/viewport")
+async def get_population_by_viewport(
+    north: float = Query(..., description="North boundary (latitude)"),
+    south: float = Query(..., description="South boundary (latitude)"), 
+    east: float = Query(..., description="East boundary (longitude)"),
+    west: float = Query(..., description="West boundary (longitude)"),
+    zoom_level: int = Query(10, description="Current map zoom level (0-20)")
+):
+    """
+    Get population density data for the current map viewport with Level-of-Detail optimization
+    """
+    try:
+        print(f"🗺️ Viewport request: bounds=({west},{south},{east},{north}), zoom={zoom_level}")
+        
+        # Level-of-Detail parameters based on zoom level
+        lod_params = get_lod_parameters(zoom_level)
+        print(f"📊 LOD parameters: {lod_params}")
+        
+        # Validate bounds
+        if not (-180 <= west <= 180 and -180 <= east <= 180 and -90 <= south <= 90 and -90 <= north <= 90):
+            raise HTTPException(status_code=400, detail="Invalid geographic bounds")
+        
+        if west >= east or south >= north:
+            raise HTTPException(status_code=400, detail="Invalid bounds: west >= east or south >= north")
+        
+        # Calculate viewport area to determine if it's too large
+        viewport_area = (east - west) * (north - south)
+        print(f"📐 Viewport area: {viewport_area:.4f} square degrees")
+        
+        # 🚨 CRITICAL: Prevent global viewport overload
+        if viewport_area > 50000:  # Larger than ~200°x250° (near-global)
+            print("🚫 GLOBAL VIEWPORT REJECTED - Too large for processing")
+            return {
+                "type": "FeatureCollection",
+                "features": [],
+                "metadata": {
+                    "total_features": 0,
+                    "bbox": f"{west},{south},{east},{north}",
+                    "viewport_area_sq_degrees": viewport_area,
+                    "warning": "Viewport too large - zoom in to load data",
+                    "max_allowed_area": 50000,
+                    "zoom_level": zoom_level,
+                    "lod_level": get_lod_level_name(zoom_level),
+                    "recommendation": "Zoom to level 6+ for data loading"
+                }
+            }
+        
+        # Adjust parameters for very large viewports
+        if viewport_area > 10000:  # Larger than ~100°x100°
+            print("⚠️ Very large viewport detected, using continental parameters")
+            lod_params = {"simplify": 0.5, "max_features": 100}  # Reduced from 200
+        elif viewport_area > 1000:  # Larger than ~30°x30°
+            print("⚠️ Large viewport detected, using regional parameters")
+            lod_params["simplify"] = max(lod_params["simplify"], 0.1)
+            lod_params["max_features"] = min(lod_params["max_features"], 800)  # Reduced from 1000
+        
+        # Format bbox for the main function
+        bbox_str = f"{west},{south},{east},{north}"
+        
+        # Call the main density function with LOD parameters
+        result = await get_population_density(
+            bbox=bbox_str,
+            simplify=lod_params["simplify"],
+            max_features=lod_params["max_features"]
+        )
+        
+        # Add viewport metadata
+        if isinstance(result, dict) and "metadata" in result:
+            result["metadata"]["viewport"] = {
+                "bounds": {"north": north, "south": south, "east": east, "west": west},
+                "zoom_level": zoom_level,
+                "lod_level": get_lod_level_name(zoom_level),
+                "viewport_area_sq_degrees": viewport_area
+            }
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in viewport-based loading: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error loading viewport data: {str(e)}"
+        )
+
+def get_lod_parameters(zoom_level: int) -> dict:
+    """
+    Get Level-of-Detail parameters based on zoom level
+    """
+    if zoom_level <= 4:    # World/Continental view
+        return {
+            "simplify": 0.5,      # Heavy simplification
+            "max_features": 200,   # Very few features
+            "detail_level": "continental"
+        }
+    elif zoom_level <= 6:  # Large country view  
+        return {
+            "simplify": 0.2,      # Moderate simplification
+            "max_features": 500,   # Few features
+            "detail_level": "country"
+        }
+    elif zoom_level <= 8:  # Country/Large region view
+        return {
+            "simplify": 0.1,      # Some simplification
+            "max_features": 1000,  # Moderate features
+            "detail_level": "region"
+        }
+    elif zoom_level <= 10: # Regional view
+        return {
+            "simplify": 0.05,     # Light simplification
+            "max_features": 2000,  # Many features
+            "detail_level": "regional"
+        }
+    elif zoom_level <= 12: # City view
+        return {
+            "simplify": 0.02,     # Minimal simplification
+            "max_features": 3500,  # Lots of features
+            "detail_level": "city"
+        }
+    else:                  # Neighborhood/Street view (13+)
+        return {
+            "simplify": 0.005,    # No simplification
+            "max_features": 5000,  # Maximum features
+            "detail_level": "detailed"
+        }
+
+def get_lod_level_name(zoom_level: int) -> str:
+    """Get human-readable LOD level name"""
+    if zoom_level <= 4: return "Continental"
+    elif zoom_level <= 6: return "Country"
+    elif zoom_level <= 8: return "Region"
+    elif zoom_level <= 10: return "Regional"
+    elif zoom_level <= 12: return "City"
+    else: return "Detailed"

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Population Density Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .legend {
+            background: white;
+            line-height: 18px;
+            color: #555;
+            padding: 6px 8px;
+            font-size: 12px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+        .info {
+            padding: 6px 8px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255,255,255,0.8);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+        }
+        .info h4 {
+            margin: 0 0 5px;
+            color: #777;
+        }
+        #loading {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: none;
+        }
+        .bounds-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="loading">Loading population data...</div>
+    <div class="bounds-info">
+        <strong>Data Bounds:</strong><br>
+        72.168°E to 73.047°E<br>
+        23.032°N to 23.405°N<br>
+        <small>(Gujarat, India - Ahmedabad region)</small>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Your data bounds from Python script
+        const dataBounds = {
+            minx: 8048399.18,
+            miny: 2607849.87,
+            maxx: 8115190.88,
+            maxy: 2680464.08
+        };
+
+        // (8048399.18, 2607849.87) to (8115190.88, 2680464.08)
+        // Calculate center of your data
+        const centerLat = (dataBounds.miny + dataBounds.maxy) / 2; // 23.218
+        const centerLng = (dataBounds.minx + dataBounds.maxx) / 2; // 72.607
+
+        // Initialize the map centered on your data
+        const map = L.map('map').setView([centerLat, centerLng], 11);
+
+        // Add base tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Add a rectangle to show your data bounds
+        const dataBoundsRect = L.rectangle([
+            [dataBounds.miny, dataBounds.minx],
+            [dataBounds.maxy, dataBounds.maxx]
+        ], {
+            color: 'red',
+            weight: 2,
+            fillOpacity: 0.1
+        }).addTo(map);
+
+        // Fit map to show the data bounds with some padding
+        map.fitBounds([
+            [dataBounds.miny, dataBounds.minx],
+            [dataBounds.maxy, dataBounds.maxx]
+        ], { padding: [20, 20] });
+
+        // Population data layer
+        let populationLayer = null;
+        let currentBounds = null;
+        let isLoading = false;
+
+        // Color function for population density
+        function getColor(population) {
+            return population > 10000 ? '#800026' :
+                   population > 5000  ? '#BD0026' :
+                   population > 2000  ? '#E31A1C' :
+                   population > 1000  ? '#FC4E2A' :
+                   population > 500   ? '#FD8D3C' :
+                   population > 200   ? '#FEB24C' :
+                   population > 100   ? '#FED976' :
+                                        '#FFEDA0';
+        }
+
+        // Style function for features
+        function style(feature) {
+            return {
+                fillColor: getColor(feature.properties.population || 0),
+                weight: 0.5,
+                opacity: 1,
+                color: 'white',
+                dashArray: '3',
+                fillOpacity: 0.7
+            };
+        }
+
+        // Highlight feature on mouseover
+        function highlightFeature(e) {
+            const layer = e.target;
+            layer.setStyle({
+                weight: 2,
+                color: '#666',
+                dashArray: '',
+                fillOpacity: 0.7
+            });
+            layer.bringToFront();
+            info.update(layer.feature.properties);
+        }
+
+        // Reset highlight on mouseout
+        function resetHighlight(e) {
+            if (populationLayer) {
+                populationLayer.resetStyle(e.target);
+            }
+            info.update();
+        }
+
+        // Zoom to feature on click
+        function zoomToFeature(e) {
+            map.fitBounds(e.target.getBounds());
+        }
+
+        // Bind events to each feature
+        function onEachFeature(feature, layer) {
+            layer.on({
+                mouseover: highlightFeature,
+                mouseout: resetHighlight,
+                click: zoomToFeature
+            });
+        }
+
+        // Load population data
+        async function loadPopulationData() {
+            if (isLoading) return;
+            
+            isLoading = true;
+            document.getElementById('loading').style.display = 'block';
+            
+            try {
+                const response = await fetch('population_custom.geojson');
+                const data = await response.json();
+                
+                console.log(`Loaded ${data.features.length} features`);
+                
+                // Remove existing layer
+                if (populationLayer) {
+                    map.removeLayer(populationLayer);
+                }
+                
+                // Add data to map
+                populationLayer = L.geoJSON(data, {
+                    style: style,
+                    onEachFeature: onEachFeature
+                }).addTo(map);
+                
+                console.log('Population layer added to map');
+                
+            } catch (error) {
+                console.error('Error loading population data:', error);
+                alert('Could not load population_custom.geojson. Make sure the file exists in the same directory as this HTML file.');
+            } finally {
+                isLoading = false;
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Info control
+        const info = L.control();
+        info.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
+        };
+        info.update = function (props) {
+            this._div.innerHTML = '<h4>Population Density</h4>' +
+                (props ? '<b>Population: ' + (props.population || 0) + '</b>'
+                : 'Hover over an area');
+        };
+        info.addTo(map);
+
+        // Legend control
+        const legend = L.control({position: 'bottomright'});
+        legend.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'info legend');
+            const grades = [0, 100, 200, 500, 1000, 2000, 5000, 10000];
+            const labels = [];
+
+            for (let i = 0; i < grades.length; i++) {
+                labels.push(
+                    '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
+                    grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] : '+'));
+            }
+            div.innerHTML = labels.join('<br>');
+            return div;
+        };
+        legend.addTo(map);
+
+        // Load data when map is ready
+        map.whenReady(() => {
+            loadPopulationData();
+        });
+    </script>
+</body>
+</html>

@@ -29,6 +29,12 @@ export default function Maps() {
   const [, setPopulationData] = useState<any>(null);
   const [populationOverlays, setPopulationOverlays] = useState<any[]>([]);
   
+  // Viewport-based loading states
+  const [currentViewport, setCurrentViewport] = useState<any>(null);
+  const [currentZoom, setCurrentZoom] = useState<number>(10);
+  const [isLoadingViewport, setIsLoadingViewport] = useState<boolean>(false);
+  const [lastLoadedViewport, setLastLoadedViewport] = useState<any>(null);
+  
   const defaultProps = {
     center: {
       lat: 23.218682,
@@ -148,7 +154,14 @@ export default function Maps() {
 
     // Add new overlay based on layer type
     if (layer === 'population') {
-      loadPopulationData();
+      // Use viewport-based loading if map is ready and suitable, otherwise load Ahmedabad region
+      if (mapInstance && currentViewport && isViewportSuitableForLoading(currentViewport, currentZoom)) {
+        console.log('🎯 Using viewport-based population loading');
+        loadViewportPopulationData(currentViewport, currentZoom);
+      } else {
+        console.log('🏙️ Map not ready or viewport too large, loading Ahmedabad region');
+        loadAhmedabadPopulationData();
+      }
     } else if (layer) {
       const overlay = createNasaOverlay(mapInstance, mapsInstance, layer);
       if (overlay) {
@@ -158,7 +171,138 @@ export default function Maps() {
     }
   };
 
-  // Function to load population data from backend
+  // Debounced function to prevent too many API calls during map navigation
+  const debouncedLoadViewportPopulation = (() => {
+    let timeoutId: NodeJS.Timeout;
+    return (bounds: any, zoom: number) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        loadViewportPopulationData(bounds, zoom);
+      }, 800); // Wait 800ms after user stops moving/zooming
+    };
+  })();
+
+  // Function to check if viewport is suitable for data loading
+  const isViewportSuitableForLoading = (bounds: any, zoom: number): boolean => {
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const latSpan = ne.lat() - sw.lat();
+    const lngSpan = ne.lng() - sw.lng();
+    const area = latSpan * lngSpan;
+    
+    console.log(`🔍 Viewport check: area=${area.toFixed(1)}°², zoom=${zoom}`);
+    
+    // Prevent global viewport loading
+    if (area > 50000) {
+      console.log('🚫 Viewport too large for loading (global view)');
+      return false;
+    }
+    
+    // Require minimum zoom level for loading
+    if (zoom < 6) {
+      console.log('🚫 Zoom level too low for loading (zoom in more)');
+      return false;
+    }
+    
+    return true;
+  };
+
+  // Function to check if viewport has changed significantly
+  const hasViewportChangedSignificantly = (newBounds: any, oldBounds: any, newZoom: number, oldZoom: number): boolean => {
+    if (!oldBounds || Math.abs(newZoom - oldZoom) >= 2) {
+      return true; // Always reload on significant zoom change
+    }
+    
+    const newNE = newBounds.getNorthEast();
+    const newSW = newBounds.getSouthWest();
+    const oldNE = oldBounds.getNorthEast();
+    const oldSW = oldBounds.getSouthWest();
+    
+    // Check if viewport moved more than 50% of current view
+    const latDiff = Math.abs(newNE.lat() - oldNE.lat()) + Math.abs(newSW.lat() - oldSW.lat());
+    const lngDiff = Math.abs(newNE.lng() - oldNE.lng()) + Math.abs(newSW.lng() - oldSW.lng());
+    const currentLatSpan = newNE.lat() - newSW.lat();
+    const currentLngSpan = newNE.lng() - newSW.lng();
+    
+    return (latDiff / currentLatSpan > 0.5) || (lngDiff / currentLngSpan > 0.5);
+  };
+
+  // Function to load population data for current viewport with Level-of-Detail
+  const loadViewportPopulationData = async (bounds: any, zoom: number) => {
+    try {
+      // 🚨 CRITICAL: Check if viewport is suitable for loading
+      if (!isViewportSuitableForLoading(bounds, zoom)) {
+        console.log('🚫 Viewport loading cancelled - not suitable');
+        setIsLoadingViewport(false);
+        return;
+      }
+      
+      // Check if we should reload (significant viewport change)
+      if (lastLoadedViewport && !hasViewportChangedSignificantly(bounds, lastLoadedViewport.bounds, zoom, lastLoadedViewport.zoom)) {
+        console.log('🔄 Viewport change not significant enough, skipping reload');
+        return;
+      }
+      
+      setIsLoadingViewport(true);
+      
+      const ne = bounds.getNorthEast();
+      const sw = bounds.getSouthWest();
+      
+      const north = ne.lat();
+      const south = sw.lat();
+      const east = ne.lng();
+      const west = sw.lng();
+      
+      console.log(`🗺️ Loading viewport population data: bounds=(${west.toFixed(3)},${south.toFixed(3)},${east.toFixed(3)},${north.toFixed(3)}), zoom=${zoom}`);
+      
+      const response = await fetch(`http://localhost:8000/api/population/density/viewport?north=${north}&south=${south}&east=${east}&west=${west}&zoom_level=${zoom}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Viewport population data error:', response.status, errorText);
+        throw new Error(`Backend error (${response.status}): ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Viewport population data loaded:', data.metadata);
+      
+      if (data.features && data.features.length > 0) {
+        // Clear existing population overlays
+        populationOverlays.forEach(overlay => overlay.setMap(null));
+        setPopulationOverlays([]);
+        
+        setPopulationData(data);
+        createPopulationChoropleth(data);
+        
+        // Update last loaded viewport
+        setLastLoadedViewport({ bounds, zoom });
+        
+        console.log(`🎯 Loaded ${data.features.length} features for ${data.metadata.viewport?.lod_level || 'unknown'} detail level`);
+        
+        // Show LOD info to user
+        if (data.metadata.viewport) {
+          const lodInfo = `📊 Level: ${data.metadata.viewport.lod_level} | Features: ${data.features.length} | Zoom: ${zoom}`;
+          console.log(lodInfo);
+        }
+      } else {
+        console.warn('⚠️ No population features found in current viewport');
+        // Don't clear existing data, just keep what we have
+      }
+    } catch (error) {
+      console.error('❌ Error loading viewport population data:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (errorMessage.includes('Failed to fetch')) {
+        console.warn('⚠️ Cannot connect to backend for viewport data');
+      } else {
+        console.error(`❌ Error loading viewport population data: ${errorMessage}`);
+      }
+    } finally {
+      setIsLoadingViewport(false);
+    }
+  };
+
+  // Function to load population data from backend (legacy method - kept for initial load)
   const loadPopulationData = async () => {
     try {
       console.log('🔄 Loading population data...');
@@ -395,6 +539,37 @@ export default function Maps() {
       setIsSelectingAOI(false);
       
       console.log('AOI selected:', bounds.toJSON());
+    });
+    
+    // Add viewport change listeners for dynamic loading
+    (maps as any).event.addListener(map, 'bounds_changed', () => {
+      if (map) {
+        const bounds = (map as any).getBounds();
+        const zoom = (map as any).getZoom();
+        
+        setCurrentViewport(bounds);
+        setCurrentZoom(zoom);
+        
+        // Debounced viewport loading for population layer (with suitability check)
+        if (activeNasaLayer === 'population' && isViewportSuitableForLoading(bounds, zoom)) {
+          debouncedLoadViewportPopulation(bounds, zoom);
+        }
+      }
+    });
+    
+    (maps as any).event.addListener(map, 'zoom_changed', () => {
+      if (map) {
+        const zoom = (map as any).getZoom();
+        setCurrentZoom(zoom);
+        
+        // Reload population data if zoom level changed significantly and population layer is active
+        if (activeNasaLayer === 'population') {
+          const bounds = (map as any).getBounds();
+          if (isViewportSuitableForLoading(bounds, zoom)) {
+            debouncedLoadViewportPopulation(bounds, zoom);
+          }
+        }
+      }
     });
     
     // Initialize with LST layer
@@ -701,10 +876,39 @@ export default function Maps() {
                 Population
               </label>
               {activeNasaLayer === 'population' && (
-                <div className="nasa-inline-legend">
-                  <span className="legend-color-bar population-gradient"></span>
-                  <span className="legend-tech-text">0-10k+ /km²</span>
-                </div>
+                <>
+                  <div className="nasa-inline-legend">
+                    <span className="legend-color-bar population-gradient"></span>
+                    <span className="legend-tech-text">0-10k+ /km²</span>
+                  </div>
+                  <div className="viewport-status">
+                    {isLoadingViewport && (
+                      <div className="loading-indicator">
+                        <span className="loading-spinner">⟳</span>
+                        <span>Loading...</span>
+                      </div>
+                    )}
+                    <div className="lod-info">
+                      <span className="lod-level">Detail: {currentZoom <= 4 ? 'Continental' : currentZoom <= 6 ? 'Country' : currentZoom <= 8 ? 'Region' : currentZoom <= 10 ? 'Regional' : currentZoom <= 12 ? 'City' : 'Detailed'}</span>
+                      <span className="zoom-level">Zoom: {currentZoom}</span>
+                    </div>
+                    {currentZoom < 6 && (
+                      <div className="viewport-warning">
+                        <span style={{color: '#ffa500', fontSize: '10px'}}>⚠️ Zoom in to load data</span>
+                      </div>
+                    )}
+                    {currentViewport && (() => {
+                      const ne = currentViewport.getNorthEast();
+                      const sw = currentViewport.getSouthWest();
+                      const area = (ne.lat() - sw.lat()) * (ne.lng() - sw.lng());
+                      return area > 50000 ? (
+                        <div className="viewport-warning">
+                          <span style={{color: '#ff6b6b', fontSize: '10px'}}>🚫 Area too large</span>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                </>
               )}
             </div>
             
