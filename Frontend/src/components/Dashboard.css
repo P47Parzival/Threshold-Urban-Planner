@@ -859,11 +859,35 @@
   top: 1rem;
   left: 5rem; /* Move right to avoid floating nav toggle */
   z-index: 10;
-  max-width: 220px;
+  max-width: 260px; /* Increased width */
+  max-height: calc(100vh - 3rem); /* Limit height to screen */
 }
 
 .map-controls-overlay .dashboard-card {
   padding: 1rem !important;
+  max-height: calc(100vh - 5rem); /* Limit height to enable scrolling */
+  overflow-y: auto; /* Enable vertical scrolling */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent; /* Firefox */
+}
+
+/* Custom scrollbar for webkit browsers */
+.map-controls-overlay .dashboard-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.map-controls-overlay .dashboard-card::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.map-controls-overlay .dashboard-card::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.map-controls-overlay .dashboard-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .map-controls-overlay h3 {
@@ -1012,6 +1036,31 @@
     #FFFF00 80%,  /* Yellow */
     #FF8000 90%,  /* Orange */
     #FF0000 100%  /* Red - high CO */
+  );
+}
+
+.aerosol-gradient {
+  background: linear-gradient(to right, 
+    #000080 0%,   /* Dark blue - clean air */
+    #0040C0 20%,  /* Blue */
+    #00A0FF 40%,  /* Light blue */
+    #80FF80 60%,  /* Green */
+    #FFFF00 75%,  /* Yellow */
+    #FF8000 85%,  /* Orange */
+    #FF0000 100%  /* Red - high aerosol */
+  );
+}
+
+.ozone-gradient {
+  background: linear-gradient(to right, 
+    #8B0000 0%,   /* Dark red - ozone hole */
+    #CD853F 15%,  /* Brown */
+    #DAA520 30%,  /* Goldenrod */
+    #FFD700 45%,  /* Gold */
+    #ADFF2F 60%,  /* Green yellow */
+    #00FF7F 75%,  /* Spring green */
+    #00CED1 85%,  /* Dark turquoise */
+    #4169E1 100%  /* Royal blue - high ozone */
   );
 }
 
@@ -1241,6 +1290,7 @@
     top: 0.5rem;
     left: 4rem; /* Account for floating nav toggle on mobile */
     max-width: calc(100vw - 5rem);
+    max-height: calc(100vh - 2rem); /* Adjust for mobile */
   }
   
   .map-legend-overlay {
@@ -1302,8 +1352,9 @@
   }
   
   .map-controls-overlay {
-    max-width: 200px;
+    max-width: 240px; /* Increased for tablet */
     left: 4.5rem; /* Account for floating nav toggle on tablet */
+    max-height: calc(100vh - 2.5rem); /* Adjust for tablet */
   }
   
   .map-legend-overlay {

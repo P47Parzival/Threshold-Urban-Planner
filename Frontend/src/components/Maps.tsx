@@ -112,6 +112,16 @@ export default function Maps() {
         name: 'AIRS_L3_Carbon_Monoxide_500hPa_Volume_Mixing_Ratio_Daily_Day',
         level: '2km',
         baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best'
+      },
+      aerosol: {
+        name: 'MODIS_Aqua_Aerosol_Optical_Depth_3km',
+        level: 'GoogleMapsCompatible_Level6',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
+      },
+      ozone: {
+        name: 'OMI_Ozone_DOAS_Total_Column',
+        level: 'GoogleMapsCompatible_Level6',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
       }
     };
 
@@ -135,7 +145,11 @@ export default function Maps() {
       tileSize: new maps.Size(256, 256),
       maxZoom: 18,
       minZoom: 1,
-      name: layer === 'lst' ? 'Land Surface Temperature' : layer === 'ndvi' ? 'Vegetation Index (NDVI)' : 'Carbon Monoxide (CO)',
+      name: layer === 'lst' ? 'Land Surface Temperature' : 
+            layer === 'ndvi' ? 'Vegetation Index (NDVI)' : 
+            layer === 'co' ? 'Carbon Monoxide (CO)' : 
+            layer === 'aerosol' ? 'Aerosol Optical Depth' :
+            'Ozone Total Column',
       opacity: 0.75
     });
 
@@ -885,6 +899,42 @@ export default function Maps() {
                 <div className="nasa-inline-legend">
                   <span className="legend-color-bar co-gradient"></span>
                   <span className="legend-tech-text">0-300 ppbv</span>
+                </div>
+              )}
+            </div>
+
+            <div className="setting-item">
+              <label>
+                <input
+                  type="radio"
+                  name="nasa-layer"
+                  checked={activeNasaLayer === 'aerosol'}
+                  onChange={() => handleNasaLayerChange('aerosol')}
+                />
+                Aerosol
+              </label>
+              {activeNasaLayer === 'aerosol' && (
+                <div className="nasa-inline-legend">
+                  <span className="legend-color-bar aerosol-gradient"></span>
+                  <span className="legend-tech-text">0.0-3.0 AOD</span>
+                </div>
+              )}
+            </div>
+
+            <div className="setting-item">
+              <label>
+                <input
+                  type="radio"
+                  name="nasa-layer"
+                  checked={activeNasaLayer === 'ozone'}
+                  onChange={() => handleNasaLayerChange('ozone')}
+                />
+                Ozone
+              </label>
+              {activeNasaLayer === 'ozone' && (
+                <div className="nasa-inline-legend">
+                  <span className="legend-color-bar ozone-gradient"></span>
+                  <span className="legend-tech-text">200-500 DU</span>
                 </div>
               )}
             </div>
