@@ -1002,6 +1002,19 @@
   );
 }
 
+.co-gradient {
+  background: linear-gradient(to right, 
+    #000080 0%,   /* Dark blue - low CO */
+    #0080FF 20%,  /* Blue */
+    #00CCFF 35%,  /* Light blue */
+    #00FFAA 50%,  /* Cyan-green */
+    #80FF80 65%,  /* Light green */
+    #FFFF00 80%,  /* Yellow */
+    #FF8000 90%,  /* Orange */
+    #FF0000 100%  /* Red - high CO */
+  );
+}
+
 /* Viewport-based loading status styles */
 .viewport-status {
   margin-top: 8px;

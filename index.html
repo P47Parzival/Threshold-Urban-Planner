@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Alternative CDN for Proj4 and Proj4Leaflet -->
+    <script src="https://unpkg.com/proj4@2.9.0/dist/proj4.js"></script>
+    <script src="https://unpkg.com/leaflet-proj4@1.0.2/dist/leaflet-proj4.js"></script>
     <style>
         body { margin: 0; padding: 0; }
         #map { height: 100vh; width: 100%; }
@@ -13,7 +16,7 @@
             position: absolute;
             top: 10px;
             left: 200px; /* Positioned to not overlap the layer control */
-            z-index: 1000;
+            z-index: 900; /* Lowered to avoid overlapping control */
             background: white;
             padding: 10px;
             border: 1px solid #ccc;
@@ -31,23 +34,44 @@
 <div id="map"></div>
 <div id="date-selector">
     <label for="date-picker">Select Date:</label>
-    <input type="date" id="date-picker" value="2025-09-22">
+    <input type="date" id="date-picker" value="2025-09-25">
 </div>
 
 <script>
+    // Check if Proj4 and Proj4Leaflet are loaded
+    if (typeof proj4 === 'undefined' || typeof L.Proj === 'undefined') {
+        console.error('Proj4 or Proj4Leaflet failed to load. Check network or CDN.');
+        console.log('Attempting to proceed without CO layer.');
+    } else {
+        console.log('Proj4 and Proj4Leaflet loaded successfully.');
+    }
+
     // --- 1. Set up the Map ---
     const ahmedabadCoords = [23.0225, 72.5714]; 
-    const map = L.map('map').setView(ahmedabadCoords, 11);
+    const map = L.map('map').setView(ahmedabadCoords, 6); // Match potential CO native zoom
 
-    // Add a base map layer
+    // Add a base map layer (in EPSG:3857)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
+    // Define EPSG:4326 projection for AIRS layer if available
+    let crs = null;
+    if (typeof L.Proj !== 'undefined') {
+        proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs');
+        crs = new L.Proj.CRS('EPSG:4326', proj4.defs('EPSG:4326'), {
+            resolutions: [0.5625, 0.28125, 0.140625, 0.0703125, 0.03515625, 0.017578125, 0.0087890625, 0.00439453125],
+            origin: [-180, 90]
+        });
+    } else {
+        console.error('CRS definition failed due to missing Proj4Leaflet.');
+    }
+
     // --- 2. Define the NASA Map Layers ---
-    let currentDate = '2025-09-22'; // Initial date
+    let currentDate = '2025-09-25'; // Initial date (recent past for availability)
     let lstTileURL = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{layer}/default/${currentDate}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
     let ndviTileURL = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{layer}/default/${currentDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png`;
+    let coTileURL = `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/{layer}/default/${currentDate}/2km/{z}/{y}/{x}.png`;
 
     const lstLayer = L.tileLayer(lstTileURL.replace('{layer}', 'MODIS_Terra_Land_Surface_Temp_Day'), {
         attribution: 'NASA GIBS',
@@ -63,26 +87,40 @@
         maxZoom: 18
     });
 
+    let coLayer = null;
+    if (crs) {
+        coLayer = L.tileLayer(coTileURL.replace('{layer}', 'AIRS_L3_Carbon_Monoxide_500hPa_Volume_Mixing_Ratio_Daily_Day'), {
+            attribution: 'NASA GIBS',
+            opacity: 0.75,
+            maxNativeZoom: 6,
+            maxZoom: 18,
+            crs: crs // Apply EPSG:4326 CRS only if defined
+        });
+    }
+
     // --- 3. Create Layer Control ---
     const baseLayers = {}; // No different base maps for this example
     const overlayLayers = {
         "Land Surface Temperature (Heat)": lstLayer,
         "Vegetation Index (NDVI)": ndviLayer
     };
+    if (coLayer) {
+        overlayLayers["Carbon Monoxide (Air Pollution)"] = coLayer;
+    }
 
-    // Add the layer control
+    // Add the layer control after defining layers
     L.control.layers(baseLayers, overlayLayers, { collapsed: false }).addTo(map);
 
     // Add the LST layer by default
     lstLayer.addTo(map);
 
-    // Ensure layers toggle correctly
+    // Ensure layers toggle correctly (only one overlay active)
     map.on('overlayadd', function (eventLayer) {
-        if (eventLayer.name === "Land Surface Temperature (Heat)") {
-            ndviLayer.removeFrom(map); // Ensure NDVI is removed
-        } else if (eventLayer.name === "Vegetation Index (NDVI)") {
-            lstLayer.removeFrom(map); // Ensure LST is removed
-        }
+        const activeName = eventLayer.name;
+        // Remove all other overlays
+        if (activeName !== "Land Surface Temperature (Heat)") lstLayer.removeFrom(map);
+        if (activeName !== "Vegetation Index (NDVI)") ndviLayer.removeFrom(map);
+        if (coLayer && activeName !== "Carbon Monoxide (Air Pollution)") coLayer.removeFrom(map);
     });
 
     // --- 4. Add Date Picker Functionality ---
@@ -99,7 +137,11 @@
         const newNdviUrl = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_NDVI_8Day/default/${currentDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png`;
         ndviLayer.setUrl(newNdviUrl);
 
-        // The active layer will automatically refresh with the new tiles
+        // Update CO layer URL if it exists
+        if (coLayer) {
+            const newCoUrl = `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/AIRS_L3_Carbon_Monoxide_500hPa_Volume_Mixing_Ratio_Daily_Day/default/${currentDate}/2km/{z}/{y}/{x}.png`;
+            coLayer.setUrl(newCoUrl);
+        }
     });
 </script>
 

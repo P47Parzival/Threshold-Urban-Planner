@@ -97,23 +97,28 @@ export default function Maps() {
 
   // NASA GIBS tile URLs
   const getNasaTileUrl = (layer: string) => {
-    const baseUrl = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best';
-
     const layerConfigs = {
       lst: {
         name: 'MODIS_Terra_Land_Surface_Temp_Day',
-        level: 'GoogleMapsCompatible_Level7'
+        level: 'GoogleMapsCompatible_Level7',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
       },
       ndvi: {
         name: 'MODIS_Terra_NDVI_8Day',
-        level: 'GoogleMapsCompatible_Level9'
+        level: 'GoogleMapsCompatible_Level9',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
+      },
+      co: {
+        name: 'AIRS_L3_Carbon_Monoxide_500hPa_Volume_Mixing_Ratio_Daily_Day',
+        level: '2km',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best'
       }
     };
 
     const config = layerConfigs[layer as keyof typeof layerConfigs];
     if (!config) return null;
 
-    return `${baseUrl}/${config.name}/default/${selectedDate}/${config.level}/{z}/{y}/{x}.png`;
+    return `${config.baseUrl}/${config.name}/default/${selectedDate}/${config.level}/{z}/{y}/{x}.png`;
   };
 
   const createNasaOverlay = (_map: any, maps: any, layer: string) => {
@@ -130,7 +135,7 @@ export default function Maps() {
       tileSize: new maps.Size(256, 256),
       maxZoom: 18,
       minZoom: 1,
-      name: layer === 'lst' ? 'Land Surface Temperature' : 'Vegetation Index (NDVI)',
+      name: layer === 'lst' ? 'Land Surface Temperature' : layer === 'ndvi' ? 'Vegetation Index (NDVI)' : 'Carbon Monoxide (CO)',
       opacity: 0.75
     });
 
@@ -303,6 +308,7 @@ export default function Maps() {
   };
 
   // Function to load population data from backend (legacy method - kept for initial load)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const loadPopulationData = async () => {
     try {
       console.log('🔄 Loading population data...');
@@ -861,6 +867,24 @@ export default function Maps() {
                 <div className="nasa-inline-legend">
                   <span className="legend-color-bar ndvi-gradient"></span>
                   <span className="legend-tech-text">-1.0 to +1.0</span>
+                </div>
+              )}
+            </div>
+
+            <div className="setting-item">
+              <label>
+                <input
+                  type="radio"
+                  name="nasa-layer"
+                  checked={activeNasaLayer === 'co'}
+                  onChange={() => handleNasaLayerChange('co')}
+                />
+                CO
+              </label>
+              {activeNasaLayer === 'co' && (
+                <div className="nasa-inline-legend">
+                  <span className="legend-color-bar co-gradient"></span>
+                  <span className="legend-tech-text">0-300 ppbv</span>
                 </div>
               )}
             </div>
