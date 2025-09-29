@@ -978,40 +978,77 @@
   top: 1rem;
   left: 5rem; /* Move right to avoid floating nav toggle */
   z-index: 10;
-  max-width: 260px; /* Increased width */
-  max-height: calc(100vh - 3rem); /* Limit height to screen */
+  max-width: 270px; /* Slightly increased width */
+  max-height: calc(100vh - 180px); /* Account for timeline space (140px) + padding */
 }
 
 .map-controls-overlay .dashboard-card {
   padding: 1rem !important;
-  max-height: calc(100vh - 5rem); /* Limit height to enable scrolling */
+  padding-bottom: 1.5rem !important; /* Extra padding at bottom */
+  max-height: calc(100vh - 200px); /* Account for timeline + margins + padding */
   overflow-y: auto; /* Enable vertical scrolling */
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.3) transparent; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.4) rgba(255, 255, 255, 0.1); /* Firefox - more visible */
+  border: 1px solid rgba(255, 255, 255, 0.25) !important; /* More visible border */
+  position: relative;
+}
+
+/* Add a scroll indicator shadow at the bottom when content is scrollable */
+.map-controls-overlay .dashboard-card::after {
+  content: '';
+  position: sticky;
+  bottom: 0;
+  display: block;
+  height: 20px;
+  margin: 0 -1rem -1.5rem -1rem; /* Extend to edges */
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.3));
+  pointer-events: none;
 }
 
 /* Custom scrollbar for webkit browsers */
 .map-controls-overlay .dashboard-card::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .map-controls-overlay .dashboard-card::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  margin: 4px 0;
 }
 
 .map-controls-overlay .dashboard-card::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .map-controls-overlay .dashboard-card::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .map-controls-overlay h3 {
   font-size: 0.9rem !important;
   margin-bottom: 1rem !important;
+  position: sticky;
+  top: -1rem;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  padding: 1rem 0 0.5rem 0;
+  margin: -1rem -1rem 1rem -1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 1;
+}
+
+/* Subtle scroll indication through enhanced border */
+.map-controls-overlay .settings-section {
+  position: relative;
+}
+
+.map-controls-overlay .settings-section:first-child {
+  border-top: 2px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.5rem;
+  margin-top: -0.5rem;
 }
 
 /* Map Legend Overlay - Bottom Left */
@@ -1461,7 +1498,11 @@
     top: 0.5rem;
     left: 4rem; /* Account for floating nav toggle on mobile */
     max-width: calc(100vw - 5rem);
-    max-height: calc(100vh - 2rem); /* Adjust for mobile */
+    max-height: calc(100vh - 160px); /* Account for mobile timeline space */
+  }
+  
+  .map-controls-overlay .dashboard-card {
+    max-height: calc(100vh - 180px) !important; /* Ensure mobile scrolling works */
   }
   
   .map-legend-overlay {
@@ -1523,9 +1564,13 @@
   }
   
   .map-controls-overlay {
-    max-width: 240px; /* Increased for tablet */
+    max-width: 250px; /* Increased for tablet */
     left: 4.5rem; /* Account for floating nav toggle on tablet */
-    max-height: calc(100vh - 2.5rem); /* Adjust for tablet */
+    max-height: calc(100vh - 160px); /* Account for tablet timeline space */
+  }
+  
+  .map-controls-overlay .dashboard-card {
+    max-height: calc(100vh - 180px) !important; /* Ensure tablet scrolling works */
   }
   
   .map-legend-overlay {
