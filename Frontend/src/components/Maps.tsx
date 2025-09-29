@@ -35,6 +35,9 @@ export default function Maps() {
   const [isLoadingViewport, setIsLoadingViewport] = useState<boolean>(false);
   const [lastLoadedViewport, setLastLoadedViewport] = useState<any>(null);
   const [mapType, setMapType] = useState<string>('roadmap');
+  const [timelineStartDate, setTimelineStartDate] = useState<string>('2021-01-01');
+  const [timelineEndDate, setTimelineEndDate] = useState<string>('2025-12-31');
+  const [showTimelineControls, setShowTimelineControls] = useState<boolean>(false);
 
   const defaultProps = {
     center: {
@@ -128,6 +131,21 @@ export default function Maps() {
         name: 'OMI_Nitrogen_Dioxide_Tropo_Column',
         level: 'GoogleMapsCompatible_Level6',
         baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
+      },
+      so2: {
+        name: 'OMI_SO2_Planetary_Boundary_Layer',
+        level: 'GoogleMapsCompatible_Level6',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
+      },
+      pm25: {
+        name: 'MERRA2_Dust_Surface_Mass_Concentration_PM25_Monthly',
+        level: 'GoogleMapsCompatible_Level6',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
+      },
+      pm10: {
+        name: 'MERRA2_Dust_Surface_Mass_Concentration_Monthly',
+        level: 'GoogleMapsCompatible_Level6',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
       }
     };
 
@@ -158,7 +176,10 @@ export default function Maps() {
             layer === 'co' ? 'Carbon Monoxide (CO)' : 
             layer === 'aerosol' ? 'Aerosol Optical Depth' :
             layer === 'ozone' ? 'Ozone Total Column' :
-            'Nitrogen Dioxide (NO₂)',
+            layer === 'no2' ? 'Nitrogen Dioxide (NO₂)' :
+            layer === 'so2' ? 'Sulfur Dioxide (SO₂)' :
+            layer === 'pm25' ? 'PM2.5 Particulate Matter' :
+            'PM10 Particulate Matter',
       opacity: 0.75
     });
 
@@ -546,6 +567,56 @@ export default function Maps() {
     }
   };
 
+  const setTimelinePreset = (preset: string) => {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    
+    switch (preset) {
+      case '1year':
+        setTimelineStartDate(`${currentYear - 1}-01-01`);
+        setTimelineEndDate(`${currentYear}-12-31`);
+        break;
+      case '3years':
+        setTimelineStartDate(`${currentYear - 3}-01-01`);
+        setTimelineEndDate(`${currentYear}-12-31`);
+        break;
+      case '5years':
+        setTimelineStartDate(`${currentYear - 5}-01-01`);
+        setTimelineEndDate(`${currentYear}-12-31`);
+        break;
+      case '10years':
+        setTimelineStartDate(`${currentYear - 10}-01-01`);
+        setTimelineEndDate(`${currentYear}-12-31`);
+        break;
+      case 'all':
+        setTimelineStartDate('2000-01-01');
+        setTimelineEndDate(`${currentYear}-12-31`);
+        break;
+      case 'recent':
+        setTimelineStartDate(`${currentYear}-01-01`);
+        setTimelineEndDate(`${currentYear}-12-31`);
+        break;
+      case 'historical':
+        setTimelineStartDate('2000-01-01');
+        setTimelineEndDate(`${currentYear - 5}-12-31`);
+        break;
+      default:
+        break;
+    }
+    // Reset timeline position when changing range
+    setTimelinePosition(0);
+  };
+
+  const handleTimelineStartDateChange = (date: string) => {
+    setTimelineStartDate(date);
+    setTimelinePosition(0); // Reset position when range changes
+  };
+
+  const handleTimelineEndDateChange = (date: string) => {
+    setTimelineEndDate(date);
+    setTimelinePosition(0); // Reset position when range changes
+  };
+
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
     // Refresh the current NASA layer with new date
@@ -554,11 +625,11 @@ export default function Maps() {
     }
   };
 
-  // Generate date range for timeline (4 years)
+  // Generate date range for timeline with custom date range
   const generateDateRange = (): string[] => {
     const dates: string[] = [];
-    const startDate = new Date('2021-01-01');
-    const endDate = new Date('2025-12-31');
+    const startDate = new Date(timelineStartDate);
+    const endDate = new Date(timelineEndDate);
     const currentDate = new Date(startDate);
 
     while (currentDate <= endDate) {
@@ -903,6 +974,60 @@ export default function Maps() {
                 <input
                   type="radio"
                   name="nasa-layer"
+                  checked={activeNasaLayer === 'so2'}
+                  onChange={() => handleNasaLayerChange('so2')}
+                />
+                SO₂
+              </label>
+              {activeNasaLayer === 'so2' && (
+                <div className="nasa-inline-legend">
+                  <span className="legend-color-bar so2-gradient"></span>
+                  <span className="legend-tech-text">0-10 DU</span>
+                </div>
+              )}
+            </div>
+
+            <div className="setting-item">
+              <label>
+                <input
+                  type="radio"
+                  name="nasa-layer"
+                  checked={activeNasaLayer === 'pm25'}
+                  onChange={() => handleNasaLayerChange('pm25')}
+                />
+                PM2.5
+              </label>
+              {activeNasaLayer === 'pm25' && (
+                <div className="nasa-inline-legend">
+                  <span className="legend-color-bar pm25-gradient"></span>
+                  <span className="legend-tech-text">0-500 μg/m³</span>
+                </div>
+              )}
+            </div>
+
+            <div className="setting-item">
+              <label>
+                <input
+                  type="radio"
+                  name="nasa-layer"
+                  checked={activeNasaLayer === 'pm10'}
+                  onChange={() => handleNasaLayerChange('pm10')}
+                />
+                PM10
+              </label>
+              {activeNasaLayer === 'pm10' && (
+                <div className="nasa-inline-legend">
+                  <span className="legend-color-bar pm10-gradient"></span>
+                  <span className="legend-tech-text">0-1000 μg/m³</span>
+                </div>
+              )}
+            </div>
+
+            <div className="setting-item">
+              <label>
+                <input
+                  type="radio"
+                  name="nasa-layer"
                   checked={activeNasaLayer === 'population'}
                   onChange={() => handleNasaLayerChange('population')}
                 />
@@ -962,6 +1087,62 @@ export default function Maps() {
 
       {/* Timeline Controls */}
       <div className="timeline-overlay">
+        {/* Timeline Range Controls */}
+        <div className="timeline-range-controls">
+          <button 
+            className="timeline-settings-btn" 
+            onClick={() => setShowTimelineControls(!showTimelineControls)}
+            title="Timeline Settings"
+          >
+            ⚙️
+          </button>
+          
+          {showTimelineControls && (
+            <div className="timeline-settings-panel">
+              <div className="timeline-presets">
+                <h4>Quick Ranges:</h4>
+                <div className="preset-buttons">
+                  <button className="preset-btn" onClick={() => setTimelinePreset('recent')}>This Year</button>
+                  <button className="preset-btn" onClick={() => setTimelinePreset('1year')}>1 Year</button>
+                  <button className="preset-btn" onClick={() => setTimelinePreset('3years')}>3 Years</button>
+                  <button className="preset-btn" onClick={() => setTimelinePreset('5years')}>5 Years</button>
+                  <button className="preset-btn" onClick={() => setTimelinePreset('10years')}>10 Years</button>
+                  <button className="preset-btn" onClick={() => setTimelinePreset('all')}>All Available</button>
+                  <button className="preset-btn" onClick={() => setTimelinePreset('historical')}>Historical Only</button>
+                </div>
+              </div>
+              
+              <div className="timeline-custom-range">
+                <h4>Custom Range:</h4>
+                <div className="date-inputs">
+                  <div className="date-input-group">
+                    <label>Start Date:</label>
+                    <input 
+                      type="date" 
+                      value={timelineStartDate} 
+                      onChange={(e) => handleTimelineStartDateChange(e.target.value)}
+                      min="2000-01-01"
+                      max="2030-12-31"
+                      className="timeline-date-input"
+                    />
+                  </div>
+                  <div className="date-input-group">
+                    <label>End Date:</label>
+                    <input 
+                      type="date" 
+                      value={timelineEndDate} 
+                      onChange={(e) => handleTimelineEndDateChange(e.target.value)}
+                      min="2000-01-01"
+                      max="2030-12-31"
+                      className="timeline-date-input"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="timeline-container">
           {/* Date Display */}
           <div className="timeline-date-display">
@@ -1027,6 +1208,14 @@ export default function Maps() {
             </span>
             <span className="timeline-position">
               {timelinePosition + 1} / {dateRange.length}
+            </span>
+            <span className="timeline-range-duration">
+              Range: {(() => {
+                const start = new Date(timelineStartDate);
+                const end = new Date(timelineEndDate);
+                const years = end.getFullYear() - start.getFullYear();
+                return years === 0 ? 'This Year' : `${years + 1} Year${years > 0 ? 's' : ''}`;
+              })()}
             </span>
           </div>
         </div>
