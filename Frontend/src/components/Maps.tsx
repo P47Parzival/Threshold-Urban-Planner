@@ -34,6 +34,7 @@ export default function Maps() {
   const [currentZoom, setCurrentZoom] = useState<number>(10);
   const [isLoadingViewport, setIsLoadingViewport] = useState<boolean>(false);
   const [lastLoadedViewport, setLastLoadedViewport] = useState<any>(null);
+  const [mapType, setMapType] = useState<string>('roadmap');
 
   const defaultProps = {
     center: {
@@ -122,13 +123,20 @@ export default function Maps() {
         name: 'OMI_Ozone_DOAS_Total_Column',
         level: 'GoogleMapsCompatible_Level6',
         baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
+      },
+      no2: {
+        name: 'OMI_Nitrogen_Dioxide_Tropo_Column',
+        level: 'GoogleMapsCompatible_Level6',
+        baseUrl: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
       }
     };
 
     const config = layerConfigs[layer as keyof typeof layerConfigs];
     if (!config) return null;
 
-    return `${config.baseUrl}/${config.name}/default/${selectedDate}/${config.level}/{z}/{y}/{x}.png`;
+    // TEMPO data requires timestamp format, others use date format
+    const dateForUrl = selectedDate;
+    return `${config.baseUrl}/${config.name}/default/${dateForUrl}/${config.level}/{z}/{y}/{x}.png`;
   };
 
   const createNasaOverlay = (_map: any, maps: any, layer: string) => {
@@ -149,7 +157,8 @@ export default function Maps() {
             layer === 'ndvi' ? 'Vegetation Index (NDVI)' : 
             layer === 'co' ? 'Carbon Monoxide (CO)' : 
             layer === 'aerosol' ? 'Aerosol Optical Depth' :
-            'Ozone Total Column',
+            layer === 'ozone' ? 'Ozone Total Column' :
+            'Nitrogen Dioxide (NO₂)',
       opacity: 0.75
     });
 
@@ -318,85 +327,6 @@ export default function Maps() {
       }
     } finally {
       setIsLoadingViewport(false);
-    }
-  };
-
-  // Function to load population data from backend (legacy method - kept for initial load)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const loadPopulationData = async () => {
-    try {
-      console.log('🔄 Loading population data...');
-      const response = await fetch('http://localhost:8000/api/population/density?max_features=500');
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Backend response error:', response.status, errorText);
-        throw new Error(`Backend error (${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ Population data loaded:', data.metadata);
-
-      if (data.features && data.features.length > 0) {
-        // Get geographic bounds from backend metadata (after CRS correction)
-        const geoBounds = data.metadata?.geographic_bounds;
-
-        if (geoBounds) {
-          console.log('🌍 Geographic bounds from backend:', geoBounds);
-          console.log(`📍 Data center: ${geoBounds.center.longitude.toFixed(2)}, ${geoBounds.center.latitude.toFixed(2)}`);
-
-          // Auto-zoom to where the data actually is
-          if (mapInstance) {
-            console.log('🎯 Auto-zooming to data location...');
-            mapInstance.setCenter({
-              lat: geoBounds.center.latitude,
-              lng: geoBounds.center.longitude
-            });
-
-            // Set appropriate zoom level based on data spread
-            const latSpread = geoBounds.max_latitude - geoBounds.min_latitude;
-            const lngSpread = geoBounds.max_longitude - geoBounds.min_longitude;
-            const maxSpread = Math.max(latSpread, lngSpread);
-
-            let zoomLevel = 10; // Default
-            if (maxSpread > 50) zoomLevel = 4;      // Continental
-            else if (maxSpread > 20) zoomLevel = 6;  // Country
-            else if (maxSpread > 5) zoomLevel = 8;   // Regional
-            else if (maxSpread > 1) zoomLevel = 10;  // City
-            else zoomLevel = 12;                     // Local
-
-            mapInstance.setZoom(zoomLevel);
-            console.log(`📊 Set zoom to ${zoomLevel} (spread: ${maxSpread.toFixed(2)}°)`);
-          }
-        } else {
-          console.warn('⚠️ No geographic bounds provided by backend');
-        }
-
-        setPopulationData(data);
-        createPopulationChoropleth(data);
-        console.log(`🗺️ Created choropleth with ${data.features.length} features`);
-
-        const regionName = geoBounds ?
-          `Lng: ${geoBounds.min_longitude.toFixed(2)} to ${geoBounds.max_longitude.toFixed(2)}, Lat: ${geoBounds.min_latitude.toFixed(2)} to ${geoBounds.max_latitude.toFixed(2)}` :
-          'Unknown region';
-
-        alert(`✅ Successfully loaded ${data.features.length} population features!\n\n📍 Data location: ${regionName}\n\n🎯 Map auto-zoomed to data area.`);
-      } else {
-        console.warn('⚠️ No population features found in response');
-        alert('❌ No population data found. The dataset might be empty or corrupted.');
-      }
-    } catch (error) {
-      console.error('❌ Error loading population data:', error);
-
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      if (errorMessage.includes('Failed to fetch')) {
-        alert('❌ Cannot connect to backend. Please ensure the backend server is running on http://localhost:8000');
-      } else if (errorMessage.includes('Backend error')) {
-        alert(`❌ Backend processing error: ${errorMessage}\n\nThis might be due to the large dataset size. Check the backend console for details.`);
-      } else {
-        alert(`❌ Error loading population data: ${errorMessage}`);
-      }
     }
   };
 
@@ -609,6 +539,13 @@ export default function Maps() {
     updateNasaLayer(layer);
   };
 
+  const handleMapTypeChange = (type: string) => {
+    setMapType(type);
+    if (mapInstance) {
+      mapInstance.setMapTypeId(type);
+    }
+  };
+
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
     // Refresh the current NASA layer with new date
@@ -808,7 +745,11 @@ export default function Maps() {
           <div className="settings-section">
             <div className="setting-item">
               <label>Map Type</label>
-              <select className="setting-select">
+              <select 
+                className="setting-select" 
+                value={mapType}
+                onChange={(e) => handleMapTypeChange(e.target.value)}
+              >
                 <option value="roadmap" className='text-black'>Roadmap</option>
                 <option value="satellite" className='text-black'>Satellite</option>
                 <option value="hybrid" className='text-black'>Hybrid</option>
@@ -935,6 +876,24 @@ export default function Maps() {
                 <div className="nasa-inline-legend">
                   <span className="legend-color-bar ozone-gradient"></span>
                   <span className="legend-tech-text">200-500 DU</span>
+                </div>
+              )}
+            </div>
+
+            <div className="setting-item">
+              <label>
+                <input
+                  type="radio"
+                  name="nasa-layer"
+                  checked={activeNasaLayer === 'no2'}
+                  onChange={() => handleNasaLayerChange('no2')}
+                />
+                NO₂
+              </label>
+              {activeNasaLayer === 'no2' && (
+                <div className="nasa-inline-legend">
+                  <span className="legend-color-bar no2-gradient"></span>
+                  <span className="legend-tech-text">0-2×10¹⁶ mol/cm²</span>
                 </div>
               )}
             </div>

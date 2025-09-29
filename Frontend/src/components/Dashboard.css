@@ -1064,6 +1064,19 @@
   );
 }
 
+.no2-gradient {
+  background: linear-gradient(to right, 
+    #001133 0%,   /* Dark blue - low NO₂ */
+    #0033AA 15%,  /* Deep blue */
+    #0066FF 30%,  /* Blue */
+    #33AAFF 45%,  /* Light blue */
+    #66CCFF 60%,  /* Cyan */
+    #FFCC00 75%,  /* Yellow */
+    #FF6600 85%,  /* Orange */
+    #FF0000 100%  /* Red - high NO₂ */
+  );
+}
+
 /* Viewport-based loading status styles */
 .viewport-status {
   margin-top: 8px;
