@@ -547,8 +547,14 @@ export default function Maps() {
     const ne = bounds.getNorthEast();
     const sw = bounds.getSouthWest();
     
-    // Adjust grid density based on zoom level
-    const gridSize = zoom <= 6 ? 2 : zoom <= 8 ? 3 : zoom <= 10 ? 4 : 5;
+    // Adjust grid density based on zoom level - Balanced for performance
+    const gridSize = zoom <= 4 ? 2 :      // Continental view: 3x3 = 9 points
+                     zoom <= 6 ? 3 :      // Country view: 4x4 = 16 points  
+                     zoom <= 8 ? 4 :      // Regional view: 5x5 = 25 points
+                     zoom <= 10 ? 5 :     // City view: 6x6 = 36 points
+                     zoom <= 12 ? 6 :     // District view: 7x7 = 49 points
+                     7;                    // Street view: 8x8 = 64 points
+    
     const points = [];
 
     const latStep = (ne.lat() - sw.lat()) / gridSize;
@@ -562,6 +568,7 @@ export default function Maps() {
       }
     }
 
+    console.log(`🎯 Generated ${points.length} grid points (${gridSize+1}x${gridSize+1}) for zoom level ${zoom}`);
     return points;
   };
 
@@ -607,7 +614,68 @@ export default function Maps() {
     }
   };
 
-  // Function to create AQI markers on the map
+
+  // Helper function to get AQI color
+  const getAqiColor = (aqi: number) => {
+    if (aqi <= 50) return '#00E400'; // Good - Green
+    if (aqi <= 100) return '#FFFF00'; // Moderate - Yellow
+    if (aqi <= 150) return '#FF7E00'; // Unhealthy for Sensitive Groups - Orange
+    if (aqi <= 200) return '#FF0000'; // Unhealthy - Red
+    if (aqi <= 300) return '#8F3F97'; // Very Unhealthy - Purple
+    return '#7E0023'; // Hazardous - Maroon
+  };
+
+  // Helper function to get AQI category
+  const getAqiCategory = (aqi: number) => {
+    if (aqi <= 50) return 'Good';
+    if (aqi <= 100) return 'Moderate';
+    if (aqi <= 150) return 'Unhealthy for Sensitive Groups';
+    if (aqi <= 200) return 'Unhealthy';
+    if (aqi <= 300) return 'Very Unhealthy';
+    return 'Hazardous';
+  };
+
+  // Function to create custom SVG icon for AQI markers
+  const createAqiIcon = (aqi: number, color: string) => {
+    const textColor = aqi <= 100 ? '#000000' : '#ffffff';
+    const aqiText = aqi.toString();
+    
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg width="40" height="50" viewBox="0 0 40 50" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <dropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.3)"/>
+            </filter>
+            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:${color};stop-opacity:1" />
+              <stop offset="100%" style="stop-color:${color};stop-opacity:0.8" />
+            </linearGradient>
+          </defs>
+          
+          <!-- Pulsing background circle -->
+          <circle cx="20" cy="20" r="18" fill="${color}" opacity="0.3">
+            <animate attributeName="r" values="18;22;18" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite"/>
+          </circle>
+          
+          <!-- Main circle -->
+          <circle cx="20" cy="20" r="16" fill="url(#gradient)" stroke="white" stroke-width="2" filter="url(#shadow)"/>
+          
+          <!-- AQI text -->
+          <text x="20" y="26" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" 
+                font-size="${aqiText.length > 2 ? '10' : '12'}" fill="${textColor}">${aqiText}</text>
+          
+          <!-- Pin stem -->
+          <polygon points="20,36 14,44 26,44" fill="${color}" filter="url(#shadow)"/>
+        </svg>
+      `)}`,
+      scaledSize: new (window as any).google.maps.Size(40, 50),
+      anchor: new (window as any).google.maps.Point(20, 50)
+    };
+  };
+
+  // Function to create AQI markers on the map using traditional markers
   const createAqiMarkers = (aqiData: any[]) => {
     if (!mapInstance || !mapsInstance) return;
 
@@ -615,94 +683,94 @@ export default function Maps() {
     aqiMarkers.forEach(marker => marker.setMap(null));
     const newMarkers: any[] = [];
 
-    // Helper function to get AQI color
-    const getAqiColor = (aqi: number) => {
-      if (aqi <= 50) return '#00E400'; // Good - Green
-      if (aqi <= 100) return '#FFFF00'; // Moderate - Yellow
-      if (aqi <= 150) return '#FF7E00'; // Unhealthy for Sensitive Groups - Orange
-      if (aqi <= 200) return '#FF0000'; // Unhealthy - Red
-      if (aqi <= 300) return '#8F3F97'; // Very Unhealthy - Purple
-      return '#7E0023'; // Hazardous - Maroon
-    };
-
-    // Helper function to get AQI category
-    const getAqiCategory = (aqi: number) => {
-      if (aqi <= 50) return 'Good';
-      if (aqi <= 100) return 'Moderate';
-      if (aqi <= 150) return 'Unhealthy for Sensitive Groups';
-      if (aqi <= 200) return 'Unhealthy';
-      if (aqi <= 300) return 'Very Unhealthy';
-      return 'Hazardous';
-    };
-
     aqiData.forEach((point) => {
       const color = getAqiColor(point.aqi);
       const category = getAqiCategory(point.aqi);
       
-      // Create a custom marker with AQI value
+      // Create traditional marker with custom SVG icon
       const marker = new mapsInstance.Marker({
         position: { lat: point.lat, lng: point.lng },
         map: mapInstance,
         title: `AQI: ${point.aqi} (${category})`,
-        icon: {
-          path: mapsInstance.SymbolPath.CIRCLE,
-          scale: Math.max(8, Math.min(20, point.aqi / 10)), // Size based on AQI value
-          fillColor: color,
-          fillOpacity: 0.8,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-          strokeOpacity: 1,
-        },
-        zIndex: 1000 + point.aqi // Higher AQI values appear on top
+        icon: createAqiIcon(point.aqi, color),
+        zIndex: 1000 + point.aqi, // Higher AQI values appear on top
+        optimized: false // Important for custom SVG icons
       });
 
       // Create info window for each marker
       const infoWindow = new mapsInstance.InfoWindow({
         content: `
-          <div style="color: #333; font-family: Arial, sans-serif; min-width: 250px;">
-            <h4 style="margin: 0 0 10px 0; color: ${color}; text-align: center;">
-              AQI: ${point.aqi}
-            </h4>
-            <p style="margin: 4px 0; text-align: center; font-weight: bold;">
-              ${category}
-            </p>
-            <hr style="margin: 8px 0; border: 1px solid #eee;">
-            <div style="font-size: 11px;">
-              <div style="display: flex; justify-content: space-between; margin: 3px 0;">
-                <span>Location:</span>
-                <span>${point.lat.toFixed(3)}°, ${point.lng.toFixed(3)}°</span>
+          <div style="color: #333; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 260px; max-width: 320px;">
+            <div style="text-align: center; margin-bottom: 12px;">
+              <div style="
+                display: inline-block;
+                background: linear-gradient(135deg, ${color}ee, ${color}aa);
+                border: 2px solid #ffffff;
+                border-radius: 50%;
+                width: 48px;
+                height: 48px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 16px;
+                color: ${point.aqi <= 100 ? '#000000' : '#ffffff'};
+                box-shadow: 0 3px 12px rgba(0,0,0,0.2);
+                margin: 0 auto 8px auto;
+              ">
+                ${point.aqi}
               </div>
-              <hr style="margin: 6px 0; border: 0.5px solid #ddd;">
-              <div style="font-weight: bold; margin-bottom: 4px; color: #666;">Pollutants:</div>
-              ${point.pm25 ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
-                <span>PM2.5:</span>
-                <span>${point.pm25} μg/m³</span>
-              </div>` : ''}
-              ${point.pm10 ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
-                <span>PM10:</span>
-                <span>${point.pm10} μg/m³</span>
-              </div>` : ''}
-              ${point.no2 ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
-                <span>NO₂:</span>
-                <span>${point.no2} μg/m³</span>
-              </div>` : ''}
-              ${point.ozone ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
-                <span>O₃:</span>
-                <span>${point.ozone} μg/m³</span>
-              </div>` : ''}
-              ${point.so2 ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
-                <span>SO₂:</span>
-                <span>${point.so2} μg/m³</span>
-              </div>` : ''}
-              ${point.co ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
-                <span>CO:</span>
-                <span>${point.co} μg/m³</span>
-              </div>` : ''}
-              <hr style="margin: 6px 0; border: 0.5px solid #ddd;">
-              <div style="display: flex; justify-content: space-between; margin: 3px 0;">
-                <span>Date:</span>
-                <span>${point.date}</span>
+              <h4 style="margin: 0; color: ${color}; font-size: 18px;">
+                Air Quality Index
+              </h4>
+              <p style="margin: 4px 0 0 0; font-weight: 600; color: #555;">
+                ${category}
+              </p>
+            </div>
+            
+            <div style="background: #f8f9fa; border-radius: 8px; padding: 10px; margin: 12px 0;">
+              <div style="font-size: 11px; color: #666; margin-bottom: 4px; font-weight: 600;">
+                📍 LOCATION
               </div>
+              <div style="font-size: 12px; color: #333;">
+                ${point.lat.toFixed(4)}°, ${point.lng.toFixed(4)}°
+              </div>
+            </div>
+            
+            <div style="background: #f8f9fa; border-radius: 8px; padding: 10px; margin: 12px 0;">
+              <div style="font-size: 11px; color: #666; margin-bottom: 6px; font-weight: 600;">
+                🌬️ POLLUTANT CONCENTRATIONS
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 11px;">
+                ${point.pm25 ? `
+                  <div style="color: #666;">PM2.5:</div>
+                  <div style="color: #333; font-weight: 500;">${point.pm25} μg/m³</div>
+                ` : ''}
+                ${point.pm10 ? `
+                  <div style="color: #666;">PM10:</div>
+                  <div style="color: #333; font-weight: 500;">${point.pm10} μg/m³</div>
+                ` : ''}
+                ${point.no2 ? `
+                  <div style="color: #666;">NO₂:</div>
+                  <div style="color: #333; font-weight: 500;">${point.no2} μg/m³</div>
+                ` : ''}
+                ${point.ozone ? `
+                  <div style="color: #666;">O₃:</div>
+                  <div style="color: #333; font-weight: 500;">${point.ozone} μg/m³</div>
+                ` : ''}
+                ${point.so2 ? `
+                  <div style="color: #666;">SO₂:</div>
+                  <div style="color: #333; font-weight: 500;">${point.so2} μg/m³</div>
+                ` : ''}
+                ${point.co ? `
+                  <div style="color: #666;">CO:</div>
+                  <div style="color: #333; font-weight: 500;">${point.co} μg/m³</div>
+                ` : ''}
+              </div>
+            </div>
+            
+            <div style="font-size: 10px; color: #888; text-align: center; margin-top: 10px;">
+              📅 ${point.date} • EPA Standards
             </div>
           </div>
         `
@@ -717,7 +785,7 @@ export default function Maps() {
     });
 
     setAqiMarkers(newMarkers);
-    console.log(`✅ Created ${newMarkers.length} AQI markers`);
+    console.log(`✅ Created ${newMarkers.length} AQI markers with custom SVG icons`);
   };
 
   const handleApiLoaded = (map: unknown, maps: unknown) => {
@@ -1358,7 +1426,13 @@ export default function Maps() {
                       </div>
                     )}
                     <div className="lod-info">
-                      <span className="lod-level">Grid: {currentZoom <= 6 ? '3x3' : currentZoom <= 8 ? '4x4' : currentZoom <= 10 ? '5x5' : '6x6'}</span>
+                      <span className="lod-level">Grid: {
+                        currentZoom <= 4 ? '3×3' : 
+                        currentZoom <= 6 ? '4×4' : 
+                        currentZoom <= 8 ? '5×5' : 
+                        currentZoom <= 10 ? '6×6' : 
+                        currentZoom <= 12 ? '7×7' : '8×8'
+                      }</span>
                       <span className="zoom-level">Zoom: {currentZoom}</span>
                     </div>
                     {aqiMarkers.length > 0 && (

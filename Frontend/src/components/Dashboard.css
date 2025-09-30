@@ -1336,6 +1336,14 @@
   border: 1px solid rgba(0, 255, 136, 0.2);
 }
 
+/* AQI Info Window Styles */
+.aqi-info-window {
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
 /* Custom map markers */
 .map-marker {
   position: relative;
