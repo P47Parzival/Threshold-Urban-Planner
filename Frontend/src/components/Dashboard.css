@@ -1272,6 +1272,17 @@
   );
 }
 
+.aqi-gradient {
+  background: linear-gradient(to right, 
+    #00E400 0%,   /* Good (0-50) - Green */
+    #FFFF00 20%,  /* Moderate (51-100) - Yellow */
+    #FF7E00 40%,  /* Unhealthy for Sensitive (101-150) - Orange */
+    #FF0000 60%,  /* Unhealthy (151-200) - Red */
+    #8F3F97 80%,  /* Very Unhealthy (201-300) - Purple */
+    #7E0023 100%  /* Hazardous (301-500) - Maroon */
+  );
+}
+
 /* Viewport-based loading status styles */
 .viewport-status {
   margin-top: 8px;
@@ -1315,6 +1326,14 @@
 .zoom-level {
   color: #87ceeb;
   font-weight: 400;
+}
+
+.aqi-data-summary {
+  margin-top: 4px;
+  padding: 2px 4px;
+  background: rgba(0, 255, 136, 0.1);
+  border-radius: 3px;
+  border: 1px solid rgba(0, 255, 136, 0.2);
 }
 
 /* Custom map markers */

@@ -28,6 +28,8 @@ export default function Maps() {
   const [containerWidth, setContainerWidth] = useState<number>(1000);
   const [, setPopulationData] = useState<any>(null);
   const [populationOverlays, setPopulationOverlays] = useState<any[]>([]);
+  const [, setAqiData] = useState<any>(null);
+  const [aqiMarkers, setAqiMarkers] = useState<any[]>([]);
 
   // Viewport-based loading states
   const [currentViewport, setCurrentViewport] = useState<any>(null);
@@ -201,6 +203,12 @@ export default function Maps() {
       setPopulationOverlays([]);
     }
 
+    // Clear AQI markers if switching away from AQI layer
+    if (layer !== 'aqi' && aqiMarkers.length > 0) {
+      aqiMarkers.forEach(marker => marker.setMap(null));
+      setAqiMarkers([]);
+    }
+
     // Add new overlay based on layer type
     if (layer === 'population') {
       // Use viewport-based loading if map is ready and suitable, otherwise load Ahmedabad region
@@ -210,6 +218,12 @@ export default function Maps() {
       } else {
         console.log('🏙️ Map not ready or viewport too large, loading Ahmedabad region');
         loadAhmedabadPopulationData();
+      }
+    } else if (layer === 'aqi') {
+      // Load AQI data for current viewport
+      if (mapInstance && currentViewport) {
+        console.log('🌬️ Loading AQI data for current viewport');
+        loadAqiData(currentViewport);
       }
     } else if (layer) {
       const overlay = createNasaOverlay(mapInstance, mapsInstance, layer);
@@ -228,6 +242,17 @@ export default function Maps() {
       timeoutId = setTimeout(() => {
         loadViewportPopulationData(bounds, zoom);
       }, 800); // Wait 800ms after user stops moving/zooming
+    };
+  })();
+
+  // Debounced function for AQI data loading
+  const debouncedLoadAqiData = (() => {
+    let timeoutId: NodeJS.Timeout;
+    return (bounds: any) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        loadAqiData(bounds);
+      }, 1000); // Wait 1 second for AQI data (external API)
     };
   })();
 
@@ -471,6 +496,230 @@ export default function Maps() {
     setPopulationOverlays(newOverlays);
   };
 
+  // Function to load AQI data for current viewport
+  const loadAqiData = async (bounds: any) => {
+    try {
+      console.log('🌬️ Loading AQI data...');
+      setIsLoadingViewport(true);
+
+      // Generate a grid of points across the viewport
+      const gridPoints = generateAqiGridPoints(bounds, currentZoom);
+      
+      // Fetch AQI data for grid points
+      const aqiPromises = gridPoints.map(point => fetchAqiForLocation(point.lat, point.lng));
+      const aqiResults = await Promise.allSettled(aqiPromises);
+
+      const validAqiData = aqiResults
+        .map((result, index) => {
+          if (result.status === 'fulfilled' && result.value) {
+            return { ...gridPoints[index], ...result.value };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      const totalPoints = gridPoints.length;
+      const successfulPoints = validAqiData.length;
+      const unavailablePoints = totalPoints - successfulPoints;
+
+      console.log(`🌬️ AQI Data Summary: ${successfulPoints}/${totalPoints} locations have data available`);
+      
+      if (successfulPoints > 0) {
+        setAqiData(validAqiData);
+        createAqiMarkers(validAqiData);
+        console.log(`✅ Created ${successfulPoints} AQI markers on map`);
+        
+        if (unavailablePoints > 0) {
+          console.log(`ℹ️ ${unavailablePoints} locations have no air quality data available`);
+        }
+      } else {
+        console.warn('⚠️ No AQI data available for any locations in current viewport');
+      }
+    } catch (error) {
+      console.error('❌ Error loading AQI data:', error);
+    } finally {
+      setIsLoadingViewport(false);
+    }
+  };
+
+  // Function to generate grid points for AQI data based on zoom level
+  const generateAqiGridPoints = (bounds: any, zoom: number) => {
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    
+    // Adjust grid density based on zoom level
+    const gridSize = zoom <= 6 ? 2 : zoom <= 8 ? 3 : zoom <= 10 ? 4 : 5;
+    const points = [];
+
+    const latStep = (ne.lat() - sw.lat()) / gridSize;
+    const lngStep = (ne.lng() - sw.lng()) / gridSize;
+
+    for (let i = 0; i <= gridSize; i++) {
+      for (let j = 0; j <= gridSize; j++) {
+        const lat = sw.lat() + (latStep * i);
+        const lng = sw.lng() + (lngStep * j);
+        points.push({ lat, lng });
+      }
+    }
+
+    return points;
+  };
+
+  // Function to fetch AQI data for a specific location using backend service
+  const fetchAqiForLocation = async (lat: number, lng: number) => {
+    try {
+      // Use the current selected date for AQI data
+      const url = `http://localhost:8000/api/aqi/calculate?` +
+        `latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&` +
+        `date=${selectedDate}`;
+
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.warn(`AQI API request failed for ${lat.toFixed(4)}, ${lng.toFixed(4)}: ${response.status} ${response.statusText}`);
+        return null;
+      }
+
+      const data = await response.json();
+      
+      // Check if data is available for this location
+      if (!data.data_available || data.aqi === null || data.aqi === undefined) {
+        console.log(`No AQI data available for location ${lat.toFixed(4)}, ${lng.toFixed(4)}: ${data.message || 'Unknown reason'}`);
+        return null;
+      }
+      
+      // Return structured data for locations with available AQI
+      return {
+        aqi: data.aqi,
+        pm25: data.pollutants?.pm2_5 ? Math.round(data.pollutants.pm2_5) : null,
+        pm10: data.pollutants?.pm10 ? Math.round(data.pollutants.pm10) : null,
+        no2: data.pollutants?.no2 ? Math.round(data.pollutants.no2) : null,
+        ozone: data.pollutants?.ozone ? Math.round(data.pollutants.ozone) : null,
+        so2: data.pollutants?.so2 ? Math.round(data.pollutants.so2) : null,
+        co: data.pollutants?.co ? Math.round(data.pollutants.co) : null,
+        date: data.date,
+        sub_indices: data.sub_indices
+      };
+      
+    } catch (error) {
+      console.warn(`Network error fetching AQI for ${lat.toFixed(4)}, ${lng.toFixed(4)}:`, error);
+      return null;
+    }
+  };
+
+  // Function to create AQI markers on the map
+  const createAqiMarkers = (aqiData: any[]) => {
+    if (!mapInstance || !mapsInstance) return;
+
+    // Clear existing AQI markers
+    aqiMarkers.forEach(marker => marker.setMap(null));
+    const newMarkers: any[] = [];
+
+    // Helper function to get AQI color
+    const getAqiColor = (aqi: number) => {
+      if (aqi <= 50) return '#00E400'; // Good - Green
+      if (aqi <= 100) return '#FFFF00'; // Moderate - Yellow
+      if (aqi <= 150) return '#FF7E00'; // Unhealthy for Sensitive Groups - Orange
+      if (aqi <= 200) return '#FF0000'; // Unhealthy - Red
+      if (aqi <= 300) return '#8F3F97'; // Very Unhealthy - Purple
+      return '#7E0023'; // Hazardous - Maroon
+    };
+
+    // Helper function to get AQI category
+    const getAqiCategory = (aqi: number) => {
+      if (aqi <= 50) return 'Good';
+      if (aqi <= 100) return 'Moderate';
+      if (aqi <= 150) return 'Unhealthy for Sensitive Groups';
+      if (aqi <= 200) return 'Unhealthy';
+      if (aqi <= 300) return 'Very Unhealthy';
+      return 'Hazardous';
+    };
+
+    aqiData.forEach((point) => {
+      const color = getAqiColor(point.aqi);
+      const category = getAqiCategory(point.aqi);
+      
+      // Create a custom marker with AQI value
+      const marker = new mapsInstance.Marker({
+        position: { lat: point.lat, lng: point.lng },
+        map: mapInstance,
+        title: `AQI: ${point.aqi} (${category})`,
+        icon: {
+          path: mapsInstance.SymbolPath.CIRCLE,
+          scale: Math.max(8, Math.min(20, point.aqi / 10)), // Size based on AQI value
+          fillColor: color,
+          fillOpacity: 0.8,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          strokeOpacity: 1,
+        },
+        zIndex: 1000 + point.aqi // Higher AQI values appear on top
+      });
+
+      // Create info window for each marker
+      const infoWindow = new mapsInstance.InfoWindow({
+        content: `
+          <div style="color: #333; font-family: Arial, sans-serif; min-width: 250px;">
+            <h4 style="margin: 0 0 10px 0; color: ${color}; text-align: center;">
+              AQI: ${point.aqi}
+            </h4>
+            <p style="margin: 4px 0; text-align: center; font-weight: bold;">
+              ${category}
+            </p>
+            <hr style="margin: 8px 0; border: 1px solid #eee;">
+            <div style="font-size: 11px;">
+              <div style="display: flex; justify-content: space-between; margin: 3px 0;">
+                <span>Location:</span>
+                <span>${point.lat.toFixed(3)}°, ${point.lng.toFixed(3)}°</span>
+              </div>
+              <hr style="margin: 6px 0; border: 0.5px solid #ddd;">
+              <div style="font-weight: bold; margin-bottom: 4px; color: #666;">Pollutants:</div>
+              ${point.pm25 ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span>PM2.5:</span>
+                <span>${point.pm25} μg/m³</span>
+              </div>` : ''}
+              ${point.pm10 ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span>PM10:</span>
+                <span>${point.pm10} μg/m³</span>
+              </div>` : ''}
+              ${point.no2 ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span>NO₂:</span>
+                <span>${point.no2} μg/m³</span>
+              </div>` : ''}
+              ${point.ozone ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span>O₃:</span>
+                <span>${point.ozone} μg/m³</span>
+              </div>` : ''}
+              ${point.so2 ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span>SO₂:</span>
+                <span>${point.so2} μg/m³</span>
+              </div>` : ''}
+              ${point.co ? `<div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span>CO:</span>
+                <span>${point.co} μg/m³</span>
+              </div>` : ''}
+              <hr style="margin: 6px 0; border: 0.5px solid #ddd;">
+              <div style="display: flex; justify-content: space-between; margin: 3px 0;">
+                <span>Date:</span>
+                <span>${point.date}</span>
+              </div>
+            </div>
+          </div>
+        `
+      });
+
+      // Add click listener to show info window
+      marker.addListener('click', () => {
+        infoWindow.open(mapInstance, marker);
+      });
+
+      newMarkers.push(marker);
+    });
+
+    setAqiMarkers(newMarkers);
+    console.log(`✅ Created ${newMarkers.length} AQI markers`);
+  };
+
   const handleApiLoaded = (map: unknown, maps: unknown) => {
     console.log('Google Maps API loaded', { map, maps });
     setMapInstance(map);
@@ -525,6 +774,11 @@ export default function Maps() {
         if (activeNasaLayer === 'population' && isViewportSuitableForLoading(bounds, zoom)) {
           debouncedLoadViewportPopulation(bounds, zoom);
         }
+
+        // Load AQI data when viewport changes (if AQI layer is active)
+        if (activeNasaLayer === 'aqi') {
+          debouncedLoadAqiData(bounds);
+        }
       }
     });
 
@@ -539,6 +793,12 @@ export default function Maps() {
           if (isViewportSuitableForLoading(bounds, zoom)) {
             debouncedLoadViewportPopulation(bounds, zoom);
           }
+        }
+
+        // Reload AQI data if zoom level changed and AQI layer is active
+        if (activeNasaLayer === 'aqi') {
+          const bounds = (map as any).getBounds();
+          debouncedLoadAqiData(bounds);
         }
       }
     });
@@ -622,6 +882,10 @@ export default function Maps() {
     // Refresh the current NASA layer with new date
     if (activeNasaLayer) {
       updateNasaLayer(activeNasaLayer);
+    }
+    // Refresh AQI data if AQI layer is active (since it's date-dependent)
+    if (activeNasaLayer === 'aqi' && mapInstance && currentViewport) {
+      debouncedLoadAqiData(currentViewport);
     }
   };
 
@@ -1065,6 +1329,55 @@ export default function Maps() {
                         </div>
                       ) : null;
                     })()}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="setting-item">
+              <label>
+                <input
+                  type="radio"
+                  name="nasa-layer"
+                  checked={activeNasaLayer === 'aqi'}
+                  onChange={() => handleNasaLayerChange('aqi')}
+                />
+                AQI
+              </label>
+              {activeNasaLayer === 'aqi' && (
+                <>
+                  <div className="nasa-inline-legend">
+                    <span className="legend-color-bar aqi-gradient"></span>
+                    <span className="legend-tech-text">0-500 AQI</span>
+                  </div>
+                  <div className="viewport-status">
+                    {isLoadingViewport && (
+                      <div className="loading-indicator">
+                        <span className="loading-spinner">⟳</span>
+                        <span>Loading AQI...</span>
+                      </div>
+                    )}
+                    <div className="lod-info">
+                      <span className="lod-level">Grid: {currentZoom <= 6 ? '3x3' : currentZoom <= 8 ? '4x4' : currentZoom <= 10 ? '5x5' : '6x6'}</span>
+                      <span className="zoom-level">Zoom: {currentZoom}</span>
+                    </div>
+                    {aqiMarkers.length > 0 && (
+                      <div className="aqi-data-summary">
+                        <span style={{ color: '#00ff88', fontSize: '10px' }}>
+                          ✓ {aqiMarkers.length} AQI point{aqiMarkers.length !== 1 ? 's' : ''} available
+                        </span>
+                      </div>
+                    )}
+                    {currentZoom < 4 && (
+                      <div className="viewport-warning">
+                        <span style={{ color: '#ffa500', fontSize: '10px' }}>⚠️ Zoom in for more data points</span>
+                      </div>
+                    )}
+                    {aqiMarkers.length === 0 && !isLoadingViewport && (
+                      <div className="viewport-warning">
+                        <span style={{ color: '#ff9500', fontSize: '10px' }}>ℹ️ No AQI data in this area</span>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
