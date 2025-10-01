@@ -1,0 +1,75 @@
+# Database Configuration
+MONGODB_URL=mongodb://localhost:27017/threshold_urban_growth
+
+# JWT Configuration
+SECRET_KEY=your_super_secret_jwt_key_here_change_this_in_production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Google Earth Engine Configuration
+# Method 1: Using Service Account Key File (JSON file path)
+GEE_SERVICE_ACCOUNT_KEY=/path/to/your/service-account-key.json
+
+# Method 2: Using Service Account Credentials (individual fields)
+# GEE_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+# GEE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour private key here\n-----END PRIVATE KEY-----"
+
+# Method 3: Using Service Account Key as JSON String (entire key as string)
+# GEE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"your-project",...}
+
+# Google Earth Engine Project (optional, for specific project access)
+# GEE_PROJECT_ID=your-google-cloud-project-id
+
+# ESA WorldCover Processing Configuration
+ESA_MIN_AREA_M2=5000  # Minimum area in square meters (default: 5000 = 0.5 hectares)
+ESA_MAX_POLYGONS=100  # Maximum polygons to return per analysis
+ESA_USE_RELAXED_FILTER=false  # Include grassland as potential vacant land
+
+# Application Configuration
+APP_NAME=THRESHOLD Urban Growth API
+APP_VERSION=1.0.0
+DEBUG=false
+
+# CORS Configuration  
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# Logging Configuration
+LOG_LEVEL=INFO
+
+
+# MongoDB Configuration
+MONGODB_URL=mongodb://localhost:27017
+DATABASE_NAME=threshold_urban_growth
+
+# JWT Configuration
+SECRET_KEY=your-super-secret-key-change-this-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=8000
+DEBUG=True
+
+# Google Earth Engine Configuration - USE ONLY ONE METHOD
+# Method 1: Service Account Key File (RECOMMENDED)
+GEE_SERVICE_ACCOUNT_KEY=Backend/isro-bah-2025-64a4c3ff1ec6.json
+
+# Google Earth Engine Project
+GEE_PROJECT_ID=isro-bah-2025
+
+# ESA WorldCover Processing Configuration
+ESA_MIN_AREA_M2=5000
+ESA_MAX_POLYGONS=100
+ESA_USE_RELAXED_FILTER=false
+
+# Application Configuration
+APP_NAME=THRESHOLD Urban Growth API
+APP_VERSION=1.0.0
+DEBUG=false
+
+# CORS Configuration  
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# Logging Configuration
+LOG_LEVEL=INFO

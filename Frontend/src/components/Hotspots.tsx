@@ -20,6 +20,7 @@ export default function Hotspots() {
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [vacantLandData, setVacantLandData] = useState<HotspotPolygon[]>([]);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [isCachedResult, setIsCachedResult] = useState<boolean>(false);
 
   const defaultProps = {
     center: {
@@ -107,6 +108,7 @@ export default function Hotspots() {
       setAoiBounds(null);
       setVacantLandData([]);
       setAnalysisResults(null);
+      setIsCachedResult(false);
       
       // Clear any existing data layers on the map
       if (mapInstance && mapInstance.data) {
@@ -170,6 +172,7 @@ export default function Hotspots() {
       console.log('Vacant land analysis results:', data);
 
       setAnalysisResults(data);
+      setIsCachedResult(data.cached || false);
       
       if (data.vacant_land_polygons && data.vacant_land_polygons.length > 0) {
         setVacantLandData(data.vacant_land_polygons);
@@ -177,7 +180,8 @@ export default function Hotspots() {
         // Add the polygons to the map
         displayVacantLandPolygons(data.vacant_land_polygons);
         
-        alert(`✅ Analysis complete! Found ${data.vacant_land_polygons.length} vacant land areas.`);
+        const cacheStatus = data.cached ? '⚡ Retrieved from cache!' : '🔍 Fresh analysis complete!';
+        alert(`✅ ${cacheStatus} Found ${data.vacant_land_polygons.length} vacant land areas.`);
       } else {
         alert('No vacant land areas found in the selected AOI.');
       }
@@ -363,7 +367,7 @@ export default function Hotspots() {
               <>
                 <div className="setting-divider"></div>
                 <div className="setting-item">
-                  <label>Analysis Results</label>
+                  <label>Analysis Results {isCachedResult && <span style={{color: '#ffeb3b', fontSize: '10px'}}>⚡ CACHED</span>}</label>
                   <div className="analysis-summary">
                     <div className="metric-item">
                       <span className="metric-value">{vacantLandData.length}</span>
@@ -381,7 +385,18 @@ export default function Hotspots() {
                       </span>
                       <span className="metric-label">Avg Hotspot Score</span>
                     </div>
+                    <div className="metric-item">
+                      <span className="metric-value">
+                        {analysisResults.processing_time ? `${(analysisResults.processing_time * 1000).toFixed(0)}` : '0'}ms
+                      </span>
+                      <span className="metric-label">{isCachedResult ? 'Cache Retrieval' : 'Processing Time'}</span>
+                    </div>
                   </div>
+                  {isCachedResult && (
+                    <small className="setting-help" style={{color: '#ffeb3b'}}>
+                      ⚡ This result was retrieved from cache for faster performance
+                    </small>
+                  )}
                 </div>
               </>
             )}
