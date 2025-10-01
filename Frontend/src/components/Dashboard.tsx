@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Maps from './Maps';
+import Hotspots from './Hotspots';
 import './Dashboard.css';
 
 interface User {
@@ -9,7 +10,7 @@ interface User {
   profession: string;
 }
 
-type TabType = 'dashboard' | 'maps' | 'settings';
+type TabType = 'dashboard' | 'maps' | 'hotspots' | 'settings';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -212,7 +213,7 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container">
       {/* Regular navbar - hidden when on maps tab */}
-      {activeTab !== 'maps' && (
+      {activeTab !== 'maps' && activeTab !== 'hotspots' && (
         <nav className="dashboard-nav">
           <div className="nav-brand">
             <h2>THRESHOLD</h2>
@@ -231,6 +232,12 @@ export default function Dashboard() {
             >
               Maps
             </button>
+            <button
+              className="tab-btn"
+              onClick={() => setActiveTab('hotspots')}
+            >
+              Hotspots
+            </button>
             <button 
               className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
               onClick={() => setActiveTab('settings')}
@@ -246,7 +253,7 @@ export default function Dashboard() {
       )}
 
       {/* Floating navigation for maps tab */}
-      {activeTab === 'maps' && (
+      {(activeTab === 'maps' || activeTab === 'hotspots') && (
         <>
           <button 
             className="floating-nav-toggle"
@@ -279,10 +286,22 @@ export default function Dashboard() {
                     Dashboard
                   </button>
                   <button 
-                    className="floating-tab-btn active"
-                    onClick={() => setShowFloatingNav(false)}
+                    className={`floating-tab-btn ${activeTab === 'maps' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('maps');
+                      setShowFloatingNav(false);
+                    }}
                   >
                     Maps
+                  </button>
+                  <button 
+                    className={`floating-tab-btn ${activeTab === 'hotspots' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('hotspots');
+                      setShowFloatingNav(false);
+                    }}
+                  >
+                    Hotspots
                   </button>
                   <button 
                     className="floating-tab-btn"
@@ -307,9 +326,10 @@ export default function Dashboard() {
         </>
       )}
 
-      <main className={`dashboard-main ${activeTab === 'maps' ? 'dashboard-main-fullscreen' : ''}`}>
+      <main className={`dashboard-main ${activeTab === 'maps' || activeTab === 'hotspots' ? 'dashboard-main-fullscreen' : ''}`}>
         {activeTab === 'dashboard' && renderDashboardContent()}
         {activeTab === 'maps' && <Maps />}
+        {activeTab === 'hotspots' && <Hotspots />}
         {activeTab === 'settings' && renderSettingsContent()}
       </main>
     </div>

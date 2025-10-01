@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import auth, users, population, aqi
+from api.routes import auth, users, population, aqi, vacant_land
 from database.connection import connect_to_database, close_database_connection
 import uvicorn
 
@@ -33,6 +33,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(population.router, prefix="/api/population", tags=["population"])
 app.include_router(aqi.router, prefix="/api/aqi", tags=["air-quality"])
+app.include_router(vacant_land.router, prefix="/api/vacant-land", tags=["vacant-land"])
 
 @app.get("/")
 async def root():

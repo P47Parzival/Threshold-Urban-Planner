@@ -1344,6 +1344,72 @@
   backdrop-filter: blur(10px) !important;
 }
 
+/* Hotspots Analysis Styles */
+.analysis-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  background: rgba(0, 255, 136, 0.05);
+  border-radius: 6px;
+  border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.analysis-summary .metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.analysis-summary .metric-value {
+  font-weight: bold;
+  color: #00ff88;
+  font-size: 16px;
+}
+
+.analysis-summary .metric-label {
+  font-size: 11px;
+  color: #ccc;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legend-text {
+  font-size: 11px;
+  color: #ccc;
+}
+
+.setting-help {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #888;
+  font-style: italic;
+}
+
+.action-btn.analyzing {
+  background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+  animation: analyzing 1.5s ease-in-out infinite;
+}
+
+@keyframes analyzing {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 /* Custom map markers */
 .map-marker {
   position: relative;
