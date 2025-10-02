@@ -2,7 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import auth, users, population, aqi, vacant_land
 from database.connection import connect_to_database, close_database_connection
+from services.gee_service import gee_service
+from services.hotspots_service import hotspots_service
 import uvicorn
+import logging
 
 app = FastAPI(
     title="Threshold Urban Growth API",
@@ -22,7 +25,42 @@ app.add_middleware(
 # Database events
 @app.on_event("startup")
 async def startup_event():
+    # Configure logging to ensure our debug logs show up
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    
+    print("="*80)
+    print("🚀 STARTING BACKEND SERVER - INITIALIZING SERVICES")
+    print("="*80)
+    
+    # Connect to database
     await connect_to_database()
+    
+    # Initialize hotspots service
+    print("📊 Initializing Hotspots Service...")
+    await hotspots_service.initialize()
+    print("✅ Hotspots Service initialized")
+    
+    # Initialize Google Earth Engine
+    print("🛰️  Initializing Google Earth Engine...")
+    print("🔍 Checking GEE credentials in environment...")
+    
+    gee_initialized = await gee_service.initialize()
+    
+    if gee_initialized:
+        print("="*80)
+        print("🚀 GOOGLE EARTH ENGINE SUCCESSFULLY INITIALIZED!")
+        print("✅ Real satellite data processing ENABLED")
+        print("🌍 ESA WorldCover dataset ACCESSIBLE")
+        print("="*80)
+    else:
+        print("="*80)
+        print("❌ GOOGLE EARTH ENGINE INITIALIZATION FAILED!")
+        print("⚠️  Will use SYNTHETIC FALLBACK data for hotspots")
+        print("🔧 Check your GEE service account credentials")
+        print("="*80)
+    
+    print("🎯 Backend startup complete!")
+    print("="*80)
 
 @app.on_event("shutdown")
 async def shutdown_event():

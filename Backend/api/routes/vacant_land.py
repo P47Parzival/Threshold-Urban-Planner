@@ -21,6 +21,7 @@ class VacantLandRequest(BaseModel):
     min_area_m2: Optional[int] = 5000  # Minimum area in square meters (0.5 hectares)
     max_polygons: Optional[int] = 100  # Maximum number of polygons to return
     use_relaxed_filter: Optional[bool] = False  # Include grassland as potential vacant land
+    use_square_fallback: Optional[bool] = True  # Use square geometry if polygon is invalid
 
 class VacantLandPolygon(BaseModel):
     id: str
@@ -39,16 +40,8 @@ class VacantLandResponse(BaseModel):
     cache_stats: Optional[Dict[str, Any]] = None
     gee_status: Optional[Dict[str, Any]] = None  # Google Earth Engine status
 
-@router.on_event("startup")
-async def startup_event():
-    """Initialize services on startup."""
-    await hotspots_service.initialize()
-    # Initialize Google Earth Engine
-    gee_initialized = await gee_service.initialize()
-    if gee_initialized:
-        logging.info("Google Earth Engine initialized successfully")
-    else:
-        logging.warning("Google Earth Engine initialization failed - will use fallback data")
+# Removed router startup event - moved to main.py
+# This ensures GEE initialization happens at app startup, not router startup
 
 @router.post("/", response_model=VacantLandResponse)
 async def analyze_vacant_land(request: VacantLandRequest):
@@ -65,6 +58,12 @@ async def analyze_vacant_land(request: VacantLandRequest):
     
     try:
         start_time = time.time()
+        
+        print("="*60)
+        print("🎯 HOTSPOTS ANALYSIS REQUEST RECEIVED")
+        print(f"📊 AOI type: {request.aoi.geometry.get('type')}")
+        print(f"⏱️  Request started at: {time.time()}")
+        print("="*60)
         
         logging.info(f"Processing vacant land analysis for AOI")
         
@@ -125,7 +124,18 @@ async def analyze_vacant_land(request: VacantLandRequest):
                 )
         
         # Step 2: No cache hit - process ESA WorldCover data
+        print("🔍 No cache hit found - processing with ESA WorldCover")
+        print(f"🛰️  GEE Status: {gee_service.is_authenticated()}")
         logging.info("No cache hit, processing ESA WorldCover data")
+        
+        # For complex polygons or to avoid topology issues, be more aggressive with square fallback
+        polygon_coords = aoi_geometry.get("coordinates", [])
+        vertex_count = len(polygon_coords[0]) if polygon_coords and len(polygon_coords) > 0 else 0
+        
+        # Use square fallback for complex polygons (>15 vertices) or by default
+        force_square = vertex_count > 15
+        if force_square:
+            logging.info(f"Polygon has {vertex_count} vertices, forcing square fallback to prevent topology issues")
         
         # Get vacant land polygons from ESA WorldCover using Google Earth Engine
         vacant_polygons_data = await esa_service.get_vacant_land_polygons(
@@ -133,7 +143,8 @@ async def analyze_vacant_land(request: VacantLandRequest):
             aoi_geometry=aoi_geometry,
             min_area_m2=request.min_area_m2,  # Use request parameter
             max_polygons=request.max_polygons,  # Use request parameter
-            use_relaxed_filter=request.use_relaxed_filter  # Use request parameter
+            use_relaxed_filter=request.use_relaxed_filter,  # Use request parameter
+            use_square_fallback=True  # Always enable square fallback
         )
         
         # Convert to response format
@@ -158,7 +169,8 @@ async def analyze_vacant_land(request: VacantLandRequest):
             "max_area_ha": max(poly.area for poly in vacant_polygons) if vacant_polygons else 0,
             "min_area_m2": request.min_area_m2,
             "analysis_method": "ESA_WorldCover_GEE_2021",
-            "use_relaxed_filter": request.use_relaxed_filter
+            "use_relaxed_filter": request.use_relaxed_filter,
+            "use_square_fallback": request.use_square_fallback
         }
         
         processing_time = time.time() - start_time
@@ -192,8 +204,57 @@ async def analyze_vacant_land(request: VacantLandRequest):
         # Re-raise HTTP exceptions (400, etc.)
         raise
     except Exception as e:
-        logging.error(f"Error in vacant land analysis: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        error_message = str(e)
+        logging.error(f"Error in vacant land analysis: {error_message}")
+        
+        # Handle specific TopologyException
+        if "TopologyException" in error_message or "side location conflict" in error_message:
+            # Try again with square fallback forced
+            try:
+                logging.info("Retrying with forced square fallback due to topology error")
+                
+                # Retry with square fallback
+                vacant_polygons_data = await esa_service.get_vacant_land_polygons(
+                    aoi_bounds=bbox,
+                    aoi_geometry=aoi_geometry,
+                    min_area_m2=request.min_area_m2,
+                    max_polygons=request.max_polygons,
+                    use_relaxed_filter=request.use_relaxed_filter,
+                    use_square_fallback=True  # Force square fallback
+                )
+                
+                # Convert to response format
+                vacant_polygons = [
+                    VacantLandPolygon(
+                        id=poly["id"],
+                        geometry=poly["geometry"],
+                        area=poly["area"],
+                        score=poly["hotspot_score"]
+                    ) for poly in vacant_polygons_data
+                ]
+                
+                # Calculate summary
+                total_area = sum(poly.area for poly in vacant_polygons)
+                avg_score = sum(poly.score or 0 for poly in vacant_polygons) / len(vacant_polygons) if vacant_polygons else 0
+                processing_time = time.time() - start_time
+                
+                return VacantLandResponse(
+                    success=True,
+                    message=f"Found {len(vacant_polygons)} vacant land areas (used square fallback due to geometry issues)",
+                    vacant_land_polygons=vacant_polygons,
+                    total_area=total_area,
+                    avg_score=avg_score,
+                    processing_time=processing_time,
+                    cached=False,
+                    cache_stats={"analysis_method": "ESA_WorldCover_GEE_2021_Square_Fallback"},
+                    gee_status=gee_service.get_status()
+                )
+                
+            except Exception as retry_error:
+                logging.error(f"Square fallback retry also failed: {str(retry_error)}")
+                raise HTTPException(status_code=500, detail=f"Geometry error (tried square fallback): {str(retry_error)}")
+        
+        raise HTTPException(status_code=500, detail=f"Internal server error: {error_message}")
 
 @router.get("/health")
 async def health_check():

@@ -37,7 +37,7 @@ class ESAWorldCoverService:
     POTENTIALLY_VACANT_CLASSES = [30, 60]  # Include some grassland
     
     def __init__(self):
-        self.dataset_id = "ESA/WorldCover/v200"
+        self.dataset_id = "ESA/WorldCover/v200"  # Fixed: Using ImageCollection format
         
     async def get_vacant_land_polygons(
         self, 
@@ -45,7 +45,8 @@ class ESAWorldCoverService:
         aoi_geometry: Dict[str, Any],
         min_area_m2: int = 5000,  # Minimum 5000 m² (0.5 hectares)
         max_polygons: int = 100,
-        use_relaxed_filter: bool = False
+        use_relaxed_filter: bool = False,
+        use_square_fallback: bool = True  # New parameter for square fallback
     ) -> List[Dict[str, Any]]:
         """
         Extract vacant land polygons from ESA WorldCover using Google Earth Engine.
@@ -56,6 +57,7 @@ class ESAWorldCoverService:
             min_area_m2: Minimum area in square meters
             max_polygons: Maximum number of polygons to return
             use_relaxed_filter: Include grassland (class 30) as potential vacant land
+            use_square_fallback: Use square AOI if polygon geometry is invalid
             
         Returns:
             List of vacant land polygons with geometry and metadata
@@ -63,16 +65,42 @@ class ESAWorldCoverService:
         try:
             # Check if Google Earth Engine is initialized
             if not gee_service.is_authenticated():
-                logging.warning("Google Earth Engine not authenticated, using fallback")
+                print("="*50)
+                print("🚫 USING SYNTHETIC FALLBACK DATA")
+                print("🔧 Google Earth Engine not authenticated")
+                print("="*50)
+                logging.error("="*50)
+                logging.error("🚫 USING SYNTHETIC FALLBACK DATA")
+                logging.error("🔧 Google Earth Engine not authenticated")
+                logging.error("="*50)
                 return await self._generate_synthetic_vacant_land(aoi_bounds, aoi_geometry)
             
-            logging.info(f"Processing ESA WorldCover data with GEE for bounds: {aoi_bounds}")
+            print("="*50)
+            print("🛰️  PROCESSING WITH GOOGLE EARTH ENGINE")
+            print("🌍 ESA WorldCover v200 - Real Satellite Data")
+            print(f"📊 AOI Bounds: {aoi_bounds}")
+            print("="*50)
+            logging.info("="*50)
+            logging.info("🛰️  PROCESSING WITH GOOGLE EARTH ENGINE")
+            logging.info("🌍 ESA WorldCover v200 - Real Satellite Data")
+            logging.info(f"📊 AOI Bounds: {aoi_bounds}")
+            logging.info("="*50)
             
-            # Step 1: Convert AOI GeoJSON to ee.Geometry
-            ee_geometry = ee.Geometry(aoi_geometry)
+            # Step 1: Convert AOI GeoJSON to ee.Geometry with validation
+            try:
+                ee_geometry = self._create_validated_geometry(aoi_geometry, aoi_bounds, use_square_fallback)
+                logging.info("Using original polygon geometry")
+            except Exception as geom_error:
+                logging.warning(f"Geometry validation failed: {str(geom_error)}")
+                if use_square_fallback:
+                    logging.info("Using square fallback geometry due to validation failure")
+                    ee_geometry = self._create_square_geometry(aoi_bounds)
+                else:
+                    raise geom_error
             
-            # Step 2: Load ESA WorldCover dataset
-            worldcover = ee.Image(self.dataset_id).select("Map")
+            # Step 2: Load ESA WorldCover dataset (ImageCollection format)
+            worldcover_collection = ee.ImageCollection(self.dataset_id).first()
+            worldcover = worldcover_collection.select("Map")
             
             # Step 3: Create mask for vacant land classes
             vacant_classes = self.POTENTIALLY_VACANT_CLASSES if use_relaxed_filter else self.VACANT_LAND_CLASSES
@@ -136,14 +164,172 @@ class ESAWorldCoverService:
                 max_polygons
             )
             
-            logging.info(f"Successfully processed {len(processed_polygons)} vacant land polygons with GEE")
+            logging.info("="*50)
+            logging.info("✅ REAL SATELLITE DATA PROCESSING COMPLETE")
+            logging.info(f"🎯 Found {len(processed_polygons)} vacant land areas")
+            logging.info("🛰️  Source: ESA WorldCover v200 via Google Earth Engine")
+            logging.info("="*50)
+            
+            print("="*50)
+            print("✅ REAL SATELLITE DATA PROCESSING COMPLETE")
+            print(f"🎯 Found {len(processed_polygons)} vacant land areas")
+            print("🛰️  Source: ESA WorldCover v200 via Google Earth Engine")
+            print("="*50)
+            
             return processed_polygons
             
         except Exception as e:
-            logging.error(f"Error processing ESA WorldCover with GEE: {str(e)}")
-            # Fallback to synthetic data
-            logging.info("Falling back to synthetic data generation")
+            print("="*50)
+            print("❌ GOOGLE EARTH ENGINE PROCESSING FAILED")
+            print(f"🚫 Error: {str(e)}")
+            print("⚠️  FALLING BACK TO SYNTHETIC DATA")
+            print("="*50)
+            logging.error("="*50)
+            logging.error("❌ GOOGLE EARTH ENGINE PROCESSING FAILED")
+            logging.error(f"🚫 Error: {str(e)}")
+            logging.error("⚠️  FALLING BACK TO SYNTHETIC DATA")
+            logging.error("="*50)
             return await self._generate_synthetic_vacant_land(aoi_bounds, aoi_geometry)
+    
+    def _create_validated_geometry(self, aoi_geometry: Dict[str, Any], aoi_bounds: Dict[str, float], use_square_fallback: bool = True):
+        """
+        Create and validate ee.Geometry from GeoJSON, with fallback options.
+        
+        Args:
+            aoi_geometry: GeoJSON geometry
+            aoi_bounds: Bounding box for fallback
+            use_square_fallback: Whether to use square fallback on validation failure
+            
+        Returns:
+            ee.Geometry: Validated geometry
+        """
+        try:
+            # For TopologyException prevention, be more aggressive with square fallback
+            # Check if polygon is complex (many vertices or self-intersecting)
+            coordinates = aoi_geometry.get("coordinates", [])
+            if coordinates and len(coordinates) > 0:
+                vertex_count = len(coordinates[0])
+                
+                # If polygon has many vertices, use square fallback preemptively
+                if vertex_count > 20:
+                    logging.info(f"Polygon has {vertex_count} vertices, using square fallback to prevent topology issues")
+                    if use_square_fallback:
+                        return self._create_square_geometry(aoi_bounds)
+            
+            # First, try to clean up the geometry
+            cleaned_geometry = self._clean_polygon_geometry(aoi_geometry)
+            
+            # Create ee.Geometry from cleaned geometry
+            ee_geometry = ee.Geometry(cleaned_geometry)
+            
+            # Test the geometry with a simple operation (this will fail if invalid)
+            try:
+                # Try a simple bounds operation to validate
+                bounds_test = ee_geometry.bounds().getInfo()
+                logging.info(f"Geometry validation successful")
+                return ee_geometry
+            except Exception as bounds_error:
+                logging.warning(f"Bounds test failed: {str(bounds_error)}")
+                raise bounds_error
+            
+        except Exception as e:
+            error_msg = str(e)
+            logging.warning(f"Geometry validation failed: {error_msg}")
+            
+            # Check for topology-related errors
+            if any(keyword in error_msg.lower() for keyword in ["topology", "side location", "intersection", "invalid"]):
+                logging.info("Detected topology-related error, forcing square fallback")
+                if use_square_fallback:
+                    return self._create_square_geometry(aoi_bounds)
+            
+            if use_square_fallback:
+                logging.info("Creating square geometry from bounds due to general error")
+                return self._create_square_geometry(aoi_bounds)
+            else:
+                raise e
+    
+    def _clean_polygon_geometry(self, geometry: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Clean polygon geometry to fix common topology issues.
+        
+        Args:
+            geometry: GeoJSON geometry
+            
+        Returns:
+            Dict: Cleaned geometry
+        """
+        if geometry.get("type") != "Polygon":
+            return geometry
+        
+        coordinates = geometry.get("coordinates", [[]])
+        if not coordinates or not coordinates[0]:
+            return geometry
+        
+        # Get the outer ring
+        outer_ring = coordinates[0]
+        
+        # Remove duplicate consecutive points
+        cleaned_ring = []
+        for i, point in enumerate(outer_ring):
+            if i == 0 or point != outer_ring[i-1]:
+                cleaned_ring.append(point)
+        
+        # Ensure the ring is closed
+        if len(cleaned_ring) > 0 and cleaned_ring[0] != cleaned_ring[-1]:
+            cleaned_ring.append(cleaned_ring[0])
+        
+        # Ensure we have at least 4 points (including closing point)
+        if len(cleaned_ring) < 4:
+            logging.warning("Insufficient points in polygon, cannot clean")
+            return geometry
+        
+        # Ensure counter-clockwise winding (GeoJSON standard)
+        if self._is_clockwise(cleaned_ring):
+            cleaned_ring.reverse()
+        
+        return {
+            "type": "Polygon",
+            "coordinates": [cleaned_ring]
+        }
+    
+    def _is_clockwise(self, ring: List[List[float]]) -> bool:
+        """Check if a polygon ring is clockwise oriented."""
+        total = 0
+        for i in range(len(ring) - 1):
+            total += (ring[i+1][0] - ring[i][0]) * (ring[i+1][1] + ring[i][1])
+        return total > 0
+    
+    def _create_square_geometry(self, bounds: Dict[str, float]):
+        """
+        Create a square ee.Geometry from bounding box.
+        
+        Args:
+            bounds: Bounding box {min_lng, max_lng, min_lat, max_lat}
+            
+        Returns:
+            ee.Geometry: Square geometry
+        """
+        min_lng = bounds["min_lng"]
+        max_lng = bounds["max_lng"] 
+        min_lat = bounds["min_lat"]
+        max_lat = bounds["max_lat"]
+        
+        # Create a simple rectangle
+        square_coords = [
+            [min_lng, min_lat],
+            [max_lng, min_lat],
+            [max_lng, max_lat],
+            [min_lng, max_lat],
+            [min_lng, min_lat]  # Close the polygon
+        ]
+        
+        square_geometry = {
+            "type": "Polygon",
+            "coordinates": [square_coords]
+        }
+        
+        logging.info(f"Created square geometry: {square_coords}")
+        return ee.Geometry(square_geometry)
     
     def _process_gee_results(
         self,
@@ -234,8 +420,9 @@ class ESAWorldCoverService:
             # Convert to ee.Geometry
             ee_geometry = ee.Geometry(aoi_geometry)
             
-            # Load WorldCover
-            worldcover = ee.Image(self.dataset_id).select("Map").clip(ee_geometry)
+            # Load WorldCover with correct ImageCollection format
+            worldcover_collection = ee.ImageCollection(self.dataset_id).first()
+            worldcover = worldcover_collection.select("Map").clip(ee_geometry)
             
             # Calculate area for each land cover class
             pixel_area = ee.Image.pixelArea()
@@ -290,7 +477,17 @@ class ESAWorldCoverService:
         import random
         from shapely.geometry import shape, Polygon
         
-        logging.info("Generating synthetic vacant land data (GEE unavailable)")
+        logging.warning("="*50)
+        logging.warning("⚠️  GENERATING SYNTHETIC FALLBACK DATA")
+        logging.warning("🔧 Google Earth Engine unavailable")
+        logging.warning("⚡ Fast response (not real satellite data)")
+        logging.warning("="*50)
+        
+        print("="*50)
+        print("⚠️  GENERATING SYNTHETIC FALLBACK DATA")
+        print("🔧 Google Earth Engine unavailable")
+        print("⚡ Fast response (not real satellite data)")
+        print("="*50)
         
         polygons = []
         aoi_polygon = shape(aoi_geometry)
@@ -339,6 +536,16 @@ class ESAWorldCoverService:
                         "data_source": "Synthetic_Fallback",
                         "processing_date": datetime.utcnow().isoformat()
                     })
+        
+        logging.warning("="*50)
+        logging.warning(f"🔧 Generated {len(polygons)} SYNTHETIC polygons")
+        logging.warning("⚠️  NOT REAL SATELLITE DATA")
+        logging.warning("="*50)
+        
+        print("="*50)
+        print(f"🔧 Generated {len(polygons)} SYNTHETIC polygons")
+        print("⚠️  NOT REAL SATELLITE DATA")
+        print("="*50)
         
         return polygons
 

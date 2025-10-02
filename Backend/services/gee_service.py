@@ -102,18 +102,27 @@ class GoogleEarthEngineService:
                     logging.error(f"Failed to initialize GEE with individual credentials: {str(e)}")
                     return False
             
-            # Test the connection
-            test_image = ee.ImageCollection("ESA/WorldCover/v200").first().select("Map")
+            # Test the connection with correct ESA WorldCover ImageCollection format
+            test_collection = ee.ImageCollection('ESA/WorldCover/v200').first()
+            test_image = test_collection.select("Map")
             info = test_image.getInfo()
             
             self.is_initialized = True
-            logging.info(f"Google Earth Engine initialized successfully with service account: {self.service_account_email}")
-            logging.info(f"ESA WorldCover dataset accessible: {info.get('id', 'Unknown')}")
+            logging.info("="*60)
+            logging.info("🚀 GOOGLE EARTH ENGINE SUCCESSFULLY INITIALIZED")
+            logging.info(f"📧 Service Account: {self.service_account_email}")
+            logging.info(f"📊 ESA WorldCover Dataset: ACCESSIBLE")
+            logging.info(f"🌍 Real Satellite Data: ENABLED")
+            logging.info("="*60)
             
             return True
             
         except Exception as e:
-            logging.error(f"Failed to initialize Google Earth Engine: {str(e)}")
+            logging.error("="*60)
+            logging.error("❌ GOOGLE EARTH ENGINE INITIALIZATION FAILED")
+            logging.error(f"🚫 Error: {str(e)}")
+            logging.error("⚠️  Will use SYNTHETIC FALLBACK data")
+            logging.error("="*60)
             self.is_initialized = False
             return False
     
