@@ -161,7 +161,7 @@ class ESAWorldCoverService:
                 vector_info = vectors.getInfo()
             
             # Step 6: Process the results
-            processed_polygons = self._process_gee_results(
+            processed_polygons = await self._process_gee_results(
                 vector_info, 
                 aoi_geometry, 
                 min_area_m2, 
@@ -335,7 +335,7 @@ class ESAWorldCoverService:
         logging.info(f"Created square geometry: {square_coords}")
         return ee.Geometry(square_geometry)
     
-    def _process_gee_results(
+    async def _process_gee_results(
         self,
         vector_info: Dict[str, Any],
         aoi_geometry: Dict[str, Any],
@@ -373,6 +373,9 @@ class ESAWorldCoverService:
                     if area_m2 >= min_area_m2:
                         # Get centroid
                         centroid = polygon_shape.centroid
+                        
+                        # Get landcover class from properties (default to 60 for bare land)
+                        landcover_class = properties.get("landcover", 60)
                         
                         # Calculate real hotspot score using ML model and real data
                         hotspot_score = await self._calculate_real_hotspot_score(
@@ -525,6 +528,9 @@ class ESAWorldCoverService:
                 intersection = aoi_polygon.intersection(test_polygon)
                 if hasattr(intersection, 'area') and intersection.area > 0:
                     area_ha = random.uniform(0.5, 8.0)
+                    area_m2 = area_ha * 10000  # Convert hectares to square meters
+                    lat = center_lat
+                    lng = center_lng
                     
                     polygons.append({
                         "id": f"synthetic_gee_{i}",
@@ -566,8 +572,16 @@ class ESAWorldCoverService:
             Hotspot score (0-100 scale for compatibility)
         """
         try:
-            # Get real AQI data
-            aqi_result = await calculate_aqi_for_location(lat, lng)
+            # Get real AQI data with today's date
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Call the AQI endpoint function directly with named parameters
+            aqi_result = await calculate_aqi_for_location(
+                latitude=lat, 
+                longitude=lng, 
+                date=today
+            )
             aqi = aqi_result.get("aqi", 100) if aqi_result.get("data_available", False) else 100
             
             # Get population density (simplified - use a default based on area)

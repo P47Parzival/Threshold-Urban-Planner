@@ -28,11 +28,31 @@ class HotspotScoringService:
         try:
             print("🤖 Initializing Hotspot Scoring Service...")
             
-            # Try to load model and scaler
-            model_path = Path("../../../Model/hotspot_model.pkl")
-            scaler_path = Path("../../../Model/scaler.pkl")
+            # Try to load model and scaler from multiple possible locations
+            possible_paths = [
+                # Current directory (Backend/)
+                (Path("hotspot_model.pkl"), Path("scaler.pkl")),
+                # Model subdirectory in Backend
+                (Path("Model/hotspot_model.pkl"), Path("Model/scaler.pkl")),
+                # Parent Model directory
+                (Path("../Model/hotspot_model.pkl"), Path("../Model/scaler.pkl")),
+                # Try with different scaler name
+                (Path("hotspot_model.pkl"), Path("scaler (1).pkl")),
+                (Path("Model/hotspot_model.pkl"), Path("Model/scaler (1).pkl")),
+                (Path("../Model/hotspot_model.pkl"), Path("../Model/scaler (1).pkl"))
+            ]
             
-            if model_path.exists() and scaler_path.exists():
+            model_path = None
+            scaler_path = None
+            
+            for m_path, s_path in possible_paths:
+                if m_path.exists() and s_path.exists():
+                    model_path = m_path
+                    scaler_path = s_path
+                    print(f"✅ Found model files at: {model_path} and {scaler_path}")
+                    break
+            
+            if model_path and scaler_path:
                 print("📦 Loading trained model and scaler...")
                 
                 with open(model_path, 'rb') as f:
@@ -44,12 +64,15 @@ class HotspotScoringService:
                 self.is_initialized = True
                 print("✅ ML Model loaded successfully")
                 print(f"📊 Features: {self.feature_columns}")
+                print(f"🎯 Model Type: {type(self.model).__name__}")
                 logger.info("Hotspot scoring service initialized with trained model")
                 
             else:
                 print("⚠️  ML Model files not found - using fallback scoring")
-                print(f"❌ Missing: {model_path} or {scaler_path}")
-                print("🔧 Train your model first and place files in Model/ directory")
+                print(f"🔍 Searched in these locations:")
+                for m_path, s_path in possible_paths:
+                    print(f"   • {m_path} and {s_path}")
+                print("🔧 Train your model first and place files in Backend/ directory")
                 self.is_initialized = False
                 logger.warning("ML model not found, using fallback scoring")
                 
