@@ -4,6 +4,8 @@ from api.routes import auth, users, population, aqi, vacant_land
 from database.connection import connect_to_database, close_database_connection
 from services.gee_service import gee_service
 from services.hotspots_service import hotspots_service
+from services.hotspot_scoring_service import hotspot_scoring_service
+from services.distance_service import distance_service
 import uvicorn
 import logging
 
@@ -59,12 +61,23 @@ async def startup_event():
         print("🔧 Check your GEE service account credentials")
         print("="*80)
     
+    # Initialize Hotspot Scoring Service
+    print("🤖 Initializing Hotspot Scoring Service...")
+    await hotspot_scoring_service.initialize()
+    
+    # Initialize Distance Calculation Service
+    print("📍 Initializing Distance Calculation Service...")
+    await distance_service.initialize()
+    
     print("🎯 Backend startup complete!")
     print("="*80)
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    print("🔧 Shutting down services...")
     await close_database_connection()
+    await distance_service.cleanup()
+    print("✅ Services shut down successfully")
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])

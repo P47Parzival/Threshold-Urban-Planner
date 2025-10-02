@@ -4,3 +4,7 @@ venv
 env
 __pycache__
 isro-bah-2025-64a4c3ff1ec6.json
+*.pyc
+*.xlxs
+*.csv
+*.xlsx

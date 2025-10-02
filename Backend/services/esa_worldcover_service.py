@@ -13,6 +13,10 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from services.gee_service import gee_service
+from services.hotspot_scoring_service import hotspot_scoring_service
+from services.distance_service import distance_service
+from api.routes.aqi import calculate_aqi_for_location
+import asyncio
 
 class ESAWorldCoverService:
     """Service for processing ESA WorldCover satellite data using Google Earth Engine."""
@@ -370,11 +374,10 @@ class ESAWorldCoverService:
                         # Get centroid
                         centroid = polygon_shape.centroid
                         
-                        # Generate hotspot score based on area and land cover class
-                        landcover_class = properties.get("landcover", 60)
-                        area_score = min(100, (area_m2 / 10000) * 20)  # Larger = better score
-                        base_score = 60 if landcover_class == 60 else 45  # Bare land scores higher
-                        hotspot_score = min(100, base_score + area_score)
+                        # Calculate real hotspot score using ML model and real data
+                        hotspot_score = await self._calculate_real_hotspot_score(
+                            centroid.y, centroid.x, area_m2  # lat, lng, area
+                        )
                         
                         processed.append({
                             "id": f"gee_vacant_{i}",
@@ -530,7 +533,9 @@ class ESAWorldCoverService:
                             "coordinates": [vertices]
                         },
                         "area": area_ha,
-                        "hotspot_score": random.uniform(50.0, 90.0),
+                        "hotspot_score": await self._calculate_real_hotspot_score(
+                            lat, lng, area_m2
+                        ),
                         "landcover_class": 60,
                         "centroid": [center_lng, center_lat],
                         "data_source": "Synthetic_Fallback",
@@ -548,6 +553,76 @@ class ESAWorldCoverService:
         print("="*50)
         
         return polygons
+    
+    async def _calculate_real_hotspot_score(self, lat: float, lng: float, area_m2: float) -> float:
+        """
+        Calculate real hotspot score using ML model and live data
+        
+        Args:
+            lat, lng: Coordinates of the polygon centroid
+            area_m2: Area of the polygon in square meters
+            
+        Returns:
+            Hotspot score (0-100 scale for compatibility)
+        """
+        try:
+            # Get real AQI data
+            aqi_result = await calculate_aqi_for_location(lat, lng)
+            aqi = aqi_result.get("aqi", 100) if aqi_result.get("data_available", False) else 100
+            
+            # Get population density (simplified - use a default based on area)
+            # In a real implementation, you'd integrate with your population service
+            population_density = 5000  # Default urban/suburban density
+            
+            # Get real distance data
+            distances = await distance_service.calculate_amenity_distances(lat, lng)
+            
+            # Calculate hotspot score using ML model
+            score_result = await hotspot_scoring_service.calculate_hotspot_score(
+                aqi=aqi,
+                population_density=population_density,
+                distances=distances
+            )
+            
+            # Convert from 0-1 scale to 0-100 scale for backward compatibility
+            score_0_100 = score_result.get("score", 0.5) * 100
+            
+            # Add area bonus (larger plots are more valuable for development)
+            area_bonus = min(20, (area_m2 / 50000) * 10)  # Up to 20 points for large areas (5+ hectares)
+            final_score = min(100, score_0_100 + area_bonus)
+            
+            logging.info(f"Hotspot score calculated for ({lat:.4f}, {lng:.4f}): {final_score:.1f} (method: {score_result.get('method', 'unknown')})")
+            
+            return round(final_score, 1)
+            
+        except Exception as e:
+            logging.error(f"Error calculating real hotspot score: {str(e)}")
+            
+            # Fallback to simple scoring if real scoring fails
+            landcover_class = 60  # Assume bare land
+            area_score = min(100, (area_m2 / 10000) * 20)  # Larger = better score
+            base_score = 60 if landcover_class == 60 else 45  # Bare land scores higher
+            fallback_score = min(100, base_score + area_score)
+            
+            logging.warning(f"Using fallback scoring: {fallback_score}")
+            return fallback_score
+    
+    async def _get_population_density(self, lat: float, lng: float) -> float:
+        """
+        Get population density for a location
+        TODO: Integrate with your population service
+        """
+        try:
+            # This is a simplified implementation
+            # In reality, you'd call your population API here
+            
+            # For now, return a reasonable default based on general urban patterns
+            # Urban centers: 8000-15000, Suburban: 2000-8000, Rural: 100-2000
+            return 5000  # Default suburban density
+            
+        except Exception as e:
+            logging.error(f"Error getting population density: {str(e)}")
+            return 5000  # Default fallback
 
 # Global service instance  
 esa_service = ESAWorldCoverService()

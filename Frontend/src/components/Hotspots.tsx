@@ -10,6 +10,30 @@ interface HotspotPolygon {
   score?: number;
 }
 
+// Helper function to get colors based on hotspot score
+const getScoreColors = (score: number) => {
+  if (score >= 80) {
+    return { fillColor: '#4CAF50', strokeColor: '#2E7D32' }; // Excellent - Green
+  } else if (score >= 70) {
+    return { fillColor: '#8BC34A', strokeColor: '#558B2F' }; // Very Good - Light Green
+  } else if (score >= 60) {
+    return { fillColor: '#FFEB3B', strokeColor: '#F57F17' }; // Good - Yellow
+  } else if (score >= 50) {
+    return { fillColor: '#FF9800', strokeColor: '#E65100' }; // Fair - Orange
+  } else {
+    return { fillColor: '#F44336', strokeColor: '#C62828' }; // Poor - Red
+  }
+};
+
+// Helper function to get score category
+const getScoreCategory = (score: number) => {
+  if (score >= 80) return 'Excellent';
+  else if (score >= 70) return 'Very Good';
+  else if (score >= 60) return 'Good';
+  else if (score >= 50) return 'Fair';
+  else return 'Poor';
+};
+
 export default function Hotspots() {
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [mapsInstance, setMapsInstance] = useState<any>(null);
@@ -216,13 +240,18 @@ export default function Hotspots() {
           geometry: polygonData.geometry
         });
 
-        // Style the polygons
-        mapInstance.data.setStyle({
-          fillColor: '#ffeb3b',
-          fillOpacity: 0.4,
-          strokeColor: '#ff9800',
-          strokeOpacity: 0.8,
-          strokeWeight: 2
+        // Style the polygons based on hotspot score
+        mapInstance.data.setStyle((feature: any) => {
+          const score = feature.getProperty('score') || 0;
+          const { fillColor, strokeColor } = getScoreColors(score);
+          
+          return {
+            fillColor: fillColor,
+            fillOpacity: 0.6,
+            strokeColor: strokeColor,
+            strokeOpacity: 0.9,
+            strokeWeight: 3
+          };
         });
       }
     });
@@ -233,13 +262,33 @@ export default function Hotspots() {
       const area = feature.getProperty('area') || 0;
       const score = feature.getProperty('score') || 0;
       
+      const scoreCategory = getScoreCategory(score);
+      const { fillColor } = getScoreColors(score);
+      
       const infoWindow = new mapsInstance.InfoWindow({
         content: `
-          <div style="color: #333; font-family: Arial, sans-serif;">
-            <h4 style="margin: 0 0 8px 0; color: #ff9800;">Vacant Land Area</h4>
-            <p style="margin: 4px 0;"><strong>Area:</strong> ${area.toFixed(2)} hectares</p>
-            <p style="margin: 4px 0;"><strong>Hotspot Score:</strong> ${score.toFixed(1)}/100</p>
-            <p style="margin: 4px 0;"><em>Suitable for residential development</em></p>
+          <div style="color: #333; font-family: Arial, sans-serif; min-width: 200px;">
+            <h4 style="margin: 0 0 8px 0; color: #2196F3; display: flex; align-items: center;">
+              🏗️ Vacant Land Hotspot
+            </h4>
+            <div style="background: #f5f5f5; padding: 8px; border-radius: 4px; margin: 8px 0;">
+              <p style="margin: 2px 0;"><strong>Area:</strong> ${area.toFixed(2)} hectares</p>
+              <p style="margin: 2px 0;">
+                <strong>Hotspot Score:</strong> 
+                <span style="color: ${fillColor}; font-weight: bold;">${score.toFixed(1)}/100</span>
+              </p>
+              <p style="margin: 2px 0;">
+                <strong>Category:</strong> 
+                <span style="color: ${fillColor}; font-weight: bold;">${scoreCategory}</span>
+              </p>
+            </div>
+            <div style="font-size: 11px; color: #666; margin-top: 8px;">
+              <p style="margin: 2px 0;">📊 Score based on:</p>
+              <p style="margin: 0; padding-left: 8px;">• Air Quality & Environment</p>
+              <p style="margin: 0; padding-left: 8px;">• Distance to Amenities</p>
+              <p style="margin: 0; padding-left: 8px;">• Population Density</p>
+              <p style="margin: 0; padding-left: 8px;">• Development Potential</p>
+            </div>
           </div>
         `
       });
@@ -392,6 +441,49 @@ export default function Hotspots() {
                       <span className="metric-label">{isCachedResult ? 'Cache Retrieval' : 'Processing Time'}</span>
                     </div>
                   </div>
+                  
+                  {/* Score Distribution */}
+                  {vacantLandData.length > 0 && (
+                    <div className="score-distribution" style={{ marginTop: '12px' }}>
+                      <label style={{ fontSize: '12px', color: '#ccc', marginBottom: '6px', display: 'block' }}>
+                        📊 Score Distribution
+                      </label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {(() => {
+                          const distribution = {
+                            excellent: vacantLandData.filter(p => (p.score || 0) >= 80).length,
+                            veryGood: vacantLandData.filter(p => (p.score || 0) >= 70 && (p.score || 0) < 80).length,
+                            good: vacantLandData.filter(p => (p.score || 0) >= 60 && (p.score || 0) < 70).length,
+                            fair: vacantLandData.filter(p => (p.score || 0) >= 50 && (p.score || 0) < 60).length,
+                            poor: vacantLandData.filter(p => (p.score || 0) < 50).length
+                          };
+                          
+                          return [
+                            { label: 'Excellent', count: distribution.excellent, color: '#4CAF50' },
+                            { label: 'Very Good', count: distribution.veryGood, color: '#8BC34A' },
+                            { label: 'Good', count: distribution.good, color: '#FFEB3B' },
+                            { label: 'Fair', count: distribution.fair, color: '#FF9800' },
+                            { label: 'Poor', count: distribution.poor, color: '#F44336' }
+                          ].map(({ label, count, color }) => (
+                            <div key={label} style={{ 
+                              fontSize: '10px', 
+                              padding: '2px 6px', 
+                              backgroundColor: color, 
+                              color: label === 'Good' ? '#333' : '#fff',
+                              borderRadius: '3px',
+                              fontWeight: 'bold'
+                            }}>
+                              {label}: {count}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )
+                  
+                  <div className="analysis-summary" style={{ display: 'none' }}>
+                    {/* This div is needed to maintain the structure but hidden */}
+                  </div>
                   {isCachedResult && (
                     <small className="setting-help" style={{color: '#ffeb3b'}}>
                       ⚡ This result was retrieved from cache for faster performance
@@ -404,12 +496,28 @@ export default function Hotspots() {
             <div className="setting-divider"></div>
 
             <div className="setting-item">
-              <label>Legend</label>
+              <label>🎨 Hotspot Score Legend</label>
               <div className="legend-item">
-                <span className="legend-color" style={{ backgroundColor: '#ffeb3b', border: '2px solid #ff9800' }}></span>
-                <span className="legend-text">Vacant Land Areas</span>
+                <span className="legend-color" style={{ backgroundColor: '#4CAF50' }}></span>
+                <span className="legend-text">Excellent (80-100)</span>
               </div>
               <div className="legend-item">
+                <span className="legend-color" style={{ backgroundColor: '#8BC34A' }}></span>
+                <span className="legend-text">Very Good (70-79)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-color" style={{ backgroundColor: '#FFEB3B' }}></span>
+                <span className="legend-text">Good (60-69)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-color" style={{ backgroundColor: '#FF9800' }}></span>
+                <span className="legend-text">Fair (50-59)</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-color" style={{ backgroundColor: '#F44336' }}></span>
+                <span className="legend-text">Poor (0-49)</span>
+              </div>
+              <div className="legend-item" style={{ marginTop: '8px', borderTop: '1px solid #444', paddingTop: '8px' }}>
                 <span className="legend-color" style={{ backgroundColor: '#00ff00', opacity: 0.3 }}></span>
                 <span className="legend-text">Selected AOI</span>
               </div>
