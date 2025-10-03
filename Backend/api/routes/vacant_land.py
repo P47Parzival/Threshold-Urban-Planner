@@ -28,6 +28,15 @@ class VacantLandPolygon(BaseModel):
     geometry: Dict[str, Any]
     area: float  # in hectares
     score: Optional[float] = 0.0  # hotspot score (0-100)
+    # Additional detailed data
+    aqi: Optional[float] = None
+    population_density: Optional[float] = None
+    amenity_distances: Optional[Dict[str, float]] = None
+    scoring_method: Optional[str] = None
+    scoring_breakdown: Optional[Dict[str, Any]] = None
+    landcover_class: Optional[int] = None
+    centroid: Optional[List[float]] = None
+    data_source: Optional[str] = None
 
 class VacantLandResponse(BaseModel):
     success: bool
@@ -147,13 +156,21 @@ async def analyze_vacant_land(request: VacantLandRequest):
             use_square_fallback=True  # Always enable square fallback
         )
         
-        # Convert to response format
+        # Convert to response format with all detailed data
         vacant_polygons = [
             VacantLandPolygon(
                 id=poly["id"],
                 geometry=poly["geometry"],
                 area=poly["area"],
-                score=poly["hotspot_score"]
+                score=poly["hotspot_score"],
+                aqi=poly.get("aqi"),
+                population_density=poly.get("population_density"),
+                amenity_distances=poly.get("amenity_distances"),
+                scoring_method=poly.get("scoring_method"),
+                scoring_breakdown=poly.get("scoring_breakdown"),
+                landcover_class=poly.get("landcover_class"),
+                centroid=poly.get("centroid"),
+                data_source=poly.get("data_source")
             ) for poly in vacant_polygons_data
         ]
         

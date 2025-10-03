@@ -385,10 +385,13 @@ class ESAWorldCoverService:
                         # Extract score and detailed breakdown
                         hotspot_score = scoring_result.get("score", 50.0)
                         aqi_data = scoring_result.get("aqi_data", {})
+                        aqi_value = scoring_result.get("aqi_value")  # Direct AQI value
                         distances = scoring_result.get("distances", {})
                         population_density = scoring_result.get("population_density", 5000)
                         scoring_method = scoring_result.get("method", "unknown")
                         scoring_breakdown = scoring_result.get("breakdown", {})
+                        
+                        print(f"📊 Polygon {i} data: score={hotspot_score}, aqi={aqi_value}, distances={len(distances)} items")
                         
                         processed.append({
                             "id": f"gee_vacant_{i}",
@@ -400,7 +403,7 @@ class ESAWorldCoverService:
                             "data_source": "ESA_WorldCover_GEE",
                             "processing_date": datetime.utcnow().isoformat(),
                             # Detailed scoring data
-                            "aqi": aqi_data.get("aqi"),
+                            "aqi": aqi_value,  # Use direct AQI value
                             "population_density": population_density,
                             "amenity_distances": distances,
                             "scoring_method": scoring_method,
@@ -564,7 +567,7 @@ class ESAWorldCoverService:
                         "data_source": "Synthetic_Fallback",
                         "processing_date": datetime.utcnow().isoformat(),
                         # Detailed scoring data
-                        "aqi": scoring_result.get("aqi_data", {}).get("aqi"),
+                        "aqi": scoring_result.get("aqi_value"),  # Use direct AQI value
                         "population_density": scoring_result.get("population_density", 5000),
                         "amenity_distances": scoring_result.get("distances", {}),
                         "scoring_method": scoring_result.get("method", "unknown"),
@@ -605,7 +608,13 @@ class ESAWorldCoverService:
                 longitude=lng, 
                 date=today
             )
+            
+            # Debug AQI result
+            print(f"🌬️ AQI result for ({lat:.4f}, {lng:.4f}): {aqi_result}")
+            
             aqi = aqi_result.get("aqi", 100) if aqi_result.get("data_available", False) else 100
+            
+            print(f"🌬️ Final AQI value: {aqi} (available: {aqi_result.get('data_available', False)})")
             
             # Get population density (simplified - use a default based on area)
             # In a real implementation, you'd integrate with your population service
@@ -631,9 +640,10 @@ class ESAWorldCoverService:
             logging.info(f"Hotspot score calculated for ({lat:.4f}, {lng:.4f}): {final_score:.1f} (method: {score_result.get('method', 'unknown')})")
             
             # Return comprehensive result
-            return {
+            result = {
                 "score": round(final_score, 1),
                 "aqi_data": aqi_result,
+                "aqi_value": aqi,  # Add direct AQI value for easier access
                 "population_density": population_density,
                 "distances": distances,
                 "method": score_result.get("method", "unknown"),
@@ -641,6 +651,9 @@ class ESAWorldCoverService:
                 "area_bonus": area_bonus,
                 "base_score": score_0_100
             }
+            
+            print(f"🎯 Returning scoring result: score={final_score:.1f}, aqi={aqi}, method={score_result.get('method')}")
+            return result
             
         except Exception as e:
             logging.error(f"Error calculating real hotspot score: {str(e)}")
@@ -655,6 +668,7 @@ class ESAWorldCoverService:
             return {
                 "score": fallback_score,
                 "aqi_data": {"aqi": None, "data_available": False},
+                "aqi_value": None,  # Add direct AQI value
                 "population_density": 5000,
                 "distances": {},
                 "method": "error_fallback",

@@ -34,22 +34,22 @@ class HotspotScoringService:
             
             # Try to load model and scaler from multiple possible locations
             possible_paths = [
-                # Current directory (Backend/)
+                # Current directory (Backend/) - where your files are
                 (Path("hotspot_model.pkl"), Path("scaler.pkl")),
-                # Model subdirectory in Backend
-                (Path("Model/hotspot_model.pkl"), Path("Model/scaler.pkl")),
                 # Parent Model directory
                 (Path("../Model/hotspot_model.pkl"), Path("../Model/scaler.pkl")),
-                # Try with different scaler name
-                (Path("hotspot_model.pkl"), Path("scaler (1).pkl")),
-                (Path("Model/hotspot_model.pkl"), Path("Model/scaler (1).pkl")),
-                (Path("../Model/hotspot_model.pkl"), Path("../Model/scaler (1).pkl"))
+                # Model subdirectory in Backend
+                (Path("Model/hotspot_model.pkl"), Path("Model/scaler.pkl"))
             ]
             
             model_path = None
             scaler_path = None
             
-            for m_path, s_path in possible_paths:
+            print("🔍 Searching for model files...")
+            for i, (m_path, s_path) in enumerate(possible_paths):
+                print(f"  {i+1}. Checking: {m_path} and {s_path}")
+                print(f"     Model exists: {m_path.exists()}, Scaler exists: {s_path.exists()}")
+                
                 if m_path.exists() and s_path.exists():
                     model_path = m_path
                     scaler_path = s_path
@@ -59,17 +59,38 @@ class HotspotScoringService:
             if model_path and scaler_path:
                 print("📦 Loading trained model and scaler...")
                 
-                with open(model_path, 'rb') as f:
-                    self.model = pickle.load(f)
-                
-                with open(scaler_path, 'rb') as f:
-                    self.scaler = pickle.load(f)
-                
-                self.is_initialized = True
-                print("✅ ML Model loaded successfully")
-                print(f"📊 Features: {self.feature_columns}")
-                print(f"🎯 Model Type: {type(self.model).__name__}")
-                logger.info("Hotspot scoring service initialized with trained model")
+                try:
+                    with open(model_path, 'rb') as f:
+                        self.model = pickle.load(f)
+                    print(f"✅ Model loaded: {type(self.model).__name__}")
+                    
+                    with open(scaler_path, 'rb') as f:
+                        self.scaler = pickle.load(f)
+                    print(f"✅ Scaler loaded: {type(self.scaler).__name__}")
+                    
+                    self.is_initialized = True
+                    print("✅ ML Model loaded successfully")
+                    print(f"📊 Features: {self.feature_columns}")
+                    print(f"🎯 Model Type: {type(self.model).__name__}")
+                    
+                    # Test the model with dummy data
+                    test_features = pd.DataFrame([{
+                        'AQI': 100, 'PopulationDensity': 5000, 'DistHospital': 5.0,
+                        'DistSchool': 3.0, 'DistAirport': 25.0, 'DistBus': 2.0,
+                        'DistRailway': 10.0, 'DistMall': 5.0
+                    }])
+                    test_scaled = self.scaler.transform(test_features)
+                    test_prediction = self.model.predict(test_scaled)[0]
+                    print(f"🧪 Test prediction: {test_prediction:.3f}")
+                    
+                    logger.info("Hotspot scoring service initialized with trained model")
+                    
+                except Exception as load_error:
+                    print(f"❌ Error loading model files: {str(load_error)}")
+                    logger.error(f"Error loading model files: {str(load_error)}")
+                    self.is_initialized = False
+                    self.model = None
+                    self.scaler = None
                 
             else:
                 print("⚠️  ML Model files not found - using fallback scoring")
@@ -107,9 +128,16 @@ class HotspotScoringService:
             Dict with score, confidence, method, and breakdown
         """
         try:
+            print(f"🤖 Hotspot scoring - Model ready: {self.is_model_ready()}")
+            print(f"🤖 Model initialized: {self.is_initialized}")
+            print(f"🤖 Model exists: {self.model is not None}")
+            print(f"🤖 Scaler exists: {self.scaler is not None}")
+            
             if self.is_model_ready():
+                print("✅ Using ML model for scoring")
                 return await self._calculate_ml_score(aqi, population_density, distances)
             else:
+                print("⚠️ Using fallback rule-based scoring")
                 return await self._calculate_fallback_score(aqi, population_density, distances)
                 
         except Exception as e:

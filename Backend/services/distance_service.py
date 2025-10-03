@@ -28,13 +28,15 @@ class DistanceService:
         """Initialize the distance service"""
         try:
             print("📍 Initializing Distance Calculation Service...")
+            print(f"🔑 API Key status: {'✅ Found' if self.google_maps_api_key else '❌ Missing'}")
             
             if not self.google_maps_api_key:
                 print("⚠️  Google Maps API key not found in environment")
                 print("🔧 Set GOOGLE_MAPS_API_KEY in your .env file")
-                logger.warning("Google Maps API key not found")
+                print("💡 Using fallback distances for now")
+                logger.warning("Google Maps API key not found - using fallback distances")
                 self.is_initialized = False
-                return False
+                return True  # Allow service to work with fallback distances
             
             # Create aiohttp session
             self.session = aiohttp.ClientSession()
