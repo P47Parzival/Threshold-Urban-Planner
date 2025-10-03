@@ -43,6 +43,11 @@ class VacantLandPolygon(BaseModel):
     amenity_distances: Optional[Dict[str, float]] = None  # distances to amenities
     landcover_class: Optional[int] = None  # ESA WorldCover class
     centroid: List[float]  # [lng, lat] for the polygon center
+    # Detailed scoring breakdown
+    aqi: Optional[float] = None  # Air Quality Index
+    population_density: Optional[float] = None  # People per sq km
+    scoring_method: Optional[str] = None  # ml_model or rule_based_fallback
+    scoring_breakdown: Optional[Dict[str, Any]] = None  # Detailed component scores
 
 class VacantLandAnalysis(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")

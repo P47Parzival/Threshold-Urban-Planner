@@ -378,9 +378,17 @@ class ESAWorldCoverService:
                         landcover_class = properties.get("landcover", 60)
                         
                         # Calculate real hotspot score using ML model and real data
-                        hotspot_score = await self._calculate_real_hotspot_score(
+                        scoring_result = await self._calculate_real_hotspot_score(
                             centroid.y, centroid.x, area_m2  # lat, lng, area
                         )
+                        
+                        # Extract score and detailed breakdown
+                        hotspot_score = scoring_result.get("score", 50.0)
+                        aqi_data = scoring_result.get("aqi_data", {})
+                        distances = scoring_result.get("distances", {})
+                        population_density = scoring_result.get("population_density", 5000)
+                        scoring_method = scoring_result.get("method", "unknown")
+                        scoring_breakdown = scoring_result.get("breakdown", {})
                         
                         processed.append({
                             "id": f"gee_vacant_{i}",
@@ -390,7 +398,13 @@ class ESAWorldCoverService:
                             "landcover_class": landcover_class,
                             "centroid": [centroid.x, centroid.y],
                             "data_source": "ESA_WorldCover_GEE",
-                            "processing_date": datetime.utcnow().isoformat()
+                            "processing_date": datetime.utcnow().isoformat(),
+                            # Detailed scoring data
+                            "aqi": aqi_data.get("aqi"),
+                            "population_density": population_density,
+                            "amenity_distances": distances,
+                            "scoring_method": scoring_method,
+                            "scoring_breakdown": scoring_breakdown
                         })
                         
                 except Exception as e:
@@ -532,6 +546,11 @@ class ESAWorldCoverService:
                     lat = center_lat
                     lng = center_lng
                     
+                    # Calculate detailed scoring
+                    scoring_result = await self._calculate_real_hotspot_score(
+                        lat, lng, area_m2
+                    )
+                    
                     polygons.append({
                         "id": f"synthetic_gee_{i}",
                         "geometry": {
@@ -539,13 +558,17 @@ class ESAWorldCoverService:
                             "coordinates": [vertices]
                         },
                         "area": area_ha,
-                        "hotspot_score": await self._calculate_real_hotspot_score(
-                            lat, lng, area_m2
-                        ),
+                        "hotspot_score": scoring_result.get("score", 50.0),
                         "landcover_class": 60,
                         "centroid": [center_lng, center_lat],
                         "data_source": "Synthetic_Fallback",
-                        "processing_date": datetime.utcnow().isoformat()
+                        "processing_date": datetime.utcnow().isoformat(),
+                        # Detailed scoring data
+                        "aqi": scoring_result.get("aqi_data", {}).get("aqi"),
+                        "population_density": scoring_result.get("population_density", 5000),
+                        "amenity_distances": scoring_result.get("distances", {}),
+                        "scoring_method": scoring_result.get("method", "unknown"),
+                        "scoring_breakdown": scoring_result.get("breakdown", {})
                     })
         
         logging.warning("="*50)
@@ -560,7 +583,7 @@ class ESAWorldCoverService:
         
         return polygons
     
-    async def _calculate_real_hotspot_score(self, lat: float, lng: float, area_m2: float) -> float:
+    async def _calculate_real_hotspot_score(self, lat: float, lng: float, area_m2: float) -> Dict[str, Any]:
         """
         Calculate real hotspot score using ML model and live data
         
@@ -569,7 +592,7 @@ class ESAWorldCoverService:
             area_m2: Area of the polygon in square meters
             
         Returns:
-            Hotspot score (0-100 scale for compatibility)
+            Dict with score, detailed breakdown, and all input data
         """
         try:
             # Get real AQI data with today's date
@@ -607,7 +630,17 @@ class ESAWorldCoverService:
             
             logging.info(f"Hotspot score calculated for ({lat:.4f}, {lng:.4f}): {final_score:.1f} (method: {score_result.get('method', 'unknown')})")
             
-            return round(final_score, 1)
+            # Return comprehensive result
+            return {
+                "score": round(final_score, 1),
+                "aqi_data": aqi_result,
+                "population_density": population_density,
+                "distances": distances,
+                "method": score_result.get("method", "unknown"),
+                "breakdown": score_result.get("breakdown", {}),
+                "area_bonus": area_bonus,
+                "base_score": score_0_100
+            }
             
         except Exception as e:
             logging.error(f"Error calculating real hotspot score: {str(e)}")
@@ -619,7 +652,16 @@ class ESAWorldCoverService:
             fallback_score = min(100, base_score + area_score)
             
             logging.warning(f"Using fallback scoring: {fallback_score}")
-            return fallback_score
+            return {
+                "score": fallback_score,
+                "aqi_data": {"aqi": None, "data_available": False},
+                "population_density": 5000,
+                "distances": {},
+                "method": "error_fallback",
+                "breakdown": {"error": str(e)},
+                "area_bonus": 0,
+                "base_score": fallback_score
+            }
     
     async def _get_population_density(self, lat: float, lng: float) -> float:
         """

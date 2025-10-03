@@ -8,6 +8,11 @@ interface HotspotPolygon {
   coordinates: number[][];
   area: number;
   score?: number;
+  aqi?: number;
+  population_density?: number;
+  amenity_distances?: { [key: string]: number };
+  scoring_method?: string;
+  scoring_breakdown?: { [key: string]: any };
 }
 
 // Helper function to get colors based on hotspot score
@@ -79,6 +84,12 @@ export default function Hotspots() {
 
     drawingMgr.setMap(map);
     setDrawingManager(drawingMgr);
+
+    // Test: Add a simple click listener to verify map data layer is working
+    console.log('🧪 Testing map data layer click functionality');
+    (map as any).data.addListener('click', (event: any) => {
+      console.log('🧪 Test click detected on map data layer', event);
+    });
 
     // Listen for polygon complete event
     (maps as any).event.addListener(drawingMgr, 'polygoncomplete', (polygon: any) => {
@@ -220,81 +231,226 @@ export default function Hotspots() {
   };
 
   const displayVacantLandPolygons = (polygons: any[]) => {
-    if (!mapInstance || !mapInstance.data) return;
+    if (!mapInstance || !mapInstance.data) {
+      console.error('❌ Map instance or data layer not available');
+      return;
+    }
+
+    console.log('🗺️ Displaying vacant land polygons:', polygons.length);
 
     // Clear existing data
     mapInstance.data.forEach((feature: any) => {
       mapInstance.data.remove(feature);
     });
 
+    // Remove any existing click listeners to avoid duplicates
+    mapsInstance.event.clearListeners(mapInstance.data, 'click');
+
     // Add new polygons
     polygons.forEach((polygonData: any, index: number) => {
+      console.log(`🔍 Processing polygon ${index + 1}:`, polygonData);
+      
       if (polygonData.geometry) {
-        const feature = mapInstance.data.addGeoJson({
-          type: 'Feature',
-          properties: {
-            id: `vacant_${index}`,
-            area: polygonData.area || 0,
-            score: polygonData.score || 0
-          },
-          geometry: polygonData.geometry
+        console.log(`📍 Adding polygon ${index + 1}:`, {
+          area: polygonData.area,
+          score: polygonData.hotspot_score || polygonData.score,
+          aqi: polygonData.aqi,
+          method: polygonData.scoring_method,
+          geometry_type: polygonData.geometry.type,
+          coordinates_length: polygonData.geometry.coordinates ? polygonData.geometry.coordinates.length : 0
         });
 
-        // Style the polygons based on hotspot score
-        mapInstance.data.setStyle((feature: any) => {
-          const score = feature.getProperty('score') || 0;
-          const { fillColor, strokeColor } = getScoreColors(score);
-          
-          return {
-            fillColor: fillColor,
-            fillOpacity: 0.6,
-            strokeColor: strokeColor,
-            strokeOpacity: 0.9,
-            strokeWeight: 3
+        try {
+          const geoJsonFeature = {
+            type: 'Feature',
+            properties: {
+              id: `vacant_${index}`,
+              area: polygonData.area || 0,
+              score: polygonData.hotspot_score || polygonData.score || 0,
+              aqi: polygonData.aqi,
+              population_density: polygonData.population_density,
+              amenity_distances: polygonData.amenity_distances || {},
+              scoring_method: polygonData.scoring_method,
+              scoring_breakdown: polygonData.scoring_breakdown || {}
+            },
+            geometry: polygonData.geometry
           };
-        });
+          
+          console.log(`📋 GeoJSON feature for polygon ${index + 1}:`, geoJsonFeature);
+          
+          const features = mapInstance.data.addGeoJson(geoJsonFeature);
+          console.log(`✅ Successfully added polygon ${index + 1}, features returned:`, features);
+          
+        } catch (error) {
+          console.error(`❌ Error adding polygon ${index + 1}:`, error);
+        }
+      } else {
+        console.warn(`⚠️ Polygon ${index + 1} has no geometry:`, polygonData);
       }
     });
 
+    // Style the polygons based on hotspot score
+    mapInstance.data.setStyle((feature: any) => {
+      const score = feature.getProperty('score') || 0;
+      const { fillColor, strokeColor } = getScoreColors(score);
+      
+      return {
+        fillColor: fillColor,
+        fillOpacity: 0.6,
+        strokeColor: strokeColor,
+        strokeOpacity: 0.9,
+        strokeWeight: 3,
+        clickable: true  // Ensure polygons are clickable
+      };
+    });
+
     // Add click listener for info windows
+    console.log('🖱️ Adding click listener to map data');
+    
+    // Test: Add a simple click listener first to see if ANY clicks are detected
     mapInstance.data.addListener('click', (event: any) => {
+      console.log('🎯 CLICK DETECTED on map data!', {
+        event: event,
+        feature: event.feature,
+        latLng: event.latLng,
+        hasFeature: !!event.feature
+      });
+    });
+    
+    mapInstance.data.addListener('click', (event: any) => {
+      console.log('🖱️ Polygon clicked!', event);
+      
+      if (!event.feature) {
+        console.warn('⚠️ No feature found in click event');
+        return;
+      }
       const feature = event.feature;
       const area = feature.getProperty('area') || 0;
       const score = feature.getProperty('score') || 0;
+      const aqi = feature.getProperty('aqi');
+      const populationDensity = feature.getProperty('population_density');
+      const amenityDistances = feature.getProperty('amenity_distances') || {};
+      const scoringMethod = feature.getProperty('scoring_method') || 'unknown';
+      const scoringBreakdown = feature.getProperty('scoring_breakdown') || {};
       
       const scoreCategory = getScoreCategory(score);
       const { fillColor } = getScoreColors(score);
       
+      // Helper function to format distance
+      const formatDistance = (dist: number) => {
+        if (dist < 1) return `${(dist * 1000).toFixed(0)}m`;
+        return `${dist.toFixed(1)}km`;
+      };
+      
+      // Helper function to get AQI category and color
+      const getAqiInfo = (aqiValue: number) => {
+        if (aqiValue <= 50) return { category: 'Good', color: '#00E400' };
+        if (aqiValue <= 100) return { category: 'Moderate', color: '#FFFF00' };
+        if (aqiValue <= 150) return { category: 'Unhealthy for Sensitive', color: '#FF7E00' };
+        if (aqiValue <= 200) return { category: 'Unhealthy', color: '#FF0000' };
+        if (aqiValue <= 300) return { category: 'Very Unhealthy', color: '#8F3F97' };
+        return { category: 'Hazardous', color: '#7E0023' };
+      };
+      
+      const aqiInfo = aqi ? getAqiInfo(aqi) : null;
+      
+      // Create amenities section
+      const amenitiesHtml = Object.keys(amenityDistances).length > 0 ? `
+        <div style="background: #f9f9f9; padding: 8px; border-radius: 4px; margin: 8px 0;">
+          <h5 style="margin: 0 0 6px 0; color: #555; font-size: 12px;">🏢 Distance to Amenities</h5>
+          ${Object.entries(amenityDistances).map(([key, value]) => `
+            <div style="display: flex; justify-content: space-between; margin: 2px 0; font-size: 11px;">
+              <span>${key.charAt(0).toUpperCase() + key.slice(1)}:</span>
+              <span style="font-weight: bold;">${formatDistance(value as number)}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '';
+      
+      console.log('📊 Creating info window with data:', {
+        area, score, aqi, populationDensity, 
+        amenityDistances: Object.keys(amenityDistances).length,
+        scoringMethod, scoringBreakdown: Object.keys(scoringBreakdown).length
+      });
+
       const infoWindow = new mapsInstance.InfoWindow({
         content: `
-          <div style="color: #333; font-family: Arial, sans-serif; min-width: 200px;">
+          <div style="color: #333; font-family: Arial, sans-serif; min-width: 280px; max-width: 350px;">
             <h4 style="margin: 0 0 8px 0; color: #2196F3; display: flex; align-items: center;">
               🏗️ Vacant Land Hotspot
             </h4>
+            
+            <!-- Basic Info -->
             <div style="background: #f5f5f5; padding: 8px; border-radius: 4px; margin: 8px 0;">
-              <p style="margin: 2px 0;"><strong>Area:</strong> ${area.toFixed(2)} hectares</p>
-              <p style="margin: 2px 0;">
-                <strong>Hotspot Score:</strong> 
+              <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span><strong>Area:</strong></span>
+                <span>${area.toFixed(2)} hectares</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span><strong>Hotspot Score:</strong></span>
                 <span style="color: ${fillColor}; font-weight: bold;">${score.toFixed(1)}/100</span>
-              </p>
-              <p style="margin: 2px 0;">
-                <strong>Category:</strong> 
+              </div>
+              <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span><strong>Category:</strong></span>
                 <span style="color: ${fillColor}; font-weight: bold;">${scoreCategory}</span>
-              </p>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <span><strong>Method:</strong></span>
+                <span style="font-size: 10px; color: #666;">${scoringMethod === 'ml_model' ? '🤖 ML Model' : '📏 Rule-based'}</span>
+              </div>
             </div>
-            <div style="font-size: 11px; color: #666; margin-top: 8px;">
-              <p style="margin: 2px 0;">📊 Score based on:</p>
-              <p style="margin: 0; padding-left: 8px;">• Air Quality & Environment</p>
-              <p style="margin: 0; padding-left: 8px;">• Distance to Amenities</p>
-              <p style="margin: 0; padding-left: 8px;">• Population Density</p>
-              <p style="margin: 0; padding-left: 8px;">• Development Potential</p>
+            
+            <!-- Environmental Data -->
+            <div style="background: #f0f8ff; padding: 8px; border-radius: 4px; margin: 8px 0;">
+              <h5 style="margin: 0 0 6px 0; color: #555; font-size: 12px;">🌍 Environmental Data</h5>
+              ${aqi ? `
+                <div style="display: flex; justify-content: space-between; margin: 2px 0; font-size: 11px;">
+                  <span>Air Quality Index:</span>
+                  <span style="color: ${aqiInfo?.color}; font-weight: bold;">${aqi} (${aqiInfo?.category})</span>
+                </div>
+              ` : `
+                <div style="font-size: 11px; color: #999;">AQI data not available</div>
+              `}
+              ${populationDensity ? `
+                <div style="display: flex; justify-content: space-between; margin: 2px 0; font-size: 11px;">
+                  <span>Population Density:</span>
+                  <span style="font-weight: bold;">${populationDensity.toLocaleString()} people/km²</span>
+                </div>
+              ` : ''}
+            </div>
+            
+            <!-- Amenities -->
+            ${amenitiesHtml}
+            
+            <!-- Score Breakdown (if available) -->
+            ${Object.keys(scoringBreakdown).length > 0 && scoringBreakdown.aqi_score ? `
+              <div style="background: #fff8e1; padding: 8px; border-radius: 4px; margin: 8px 0;">
+                <h5 style="margin: 0 0 6px 0; color: #555; font-size: 12px;">📊 Score Breakdown</h5>
+                <div style="font-size: 10px;">
+                  ${scoringBreakdown.aqi_score ? `<div>Air Quality: ${(scoringBreakdown.aqi_score * 100).toFixed(0)}%</div>` : ''}
+                  ${scoringBreakdown.population_score ? `<div>Population: ${(scoringBreakdown.population_score * 100).toFixed(0)}%</div>` : ''}
+                  ${scoringBreakdown.hospital_score ? `<div>Hospital Access: ${(scoringBreakdown.hospital_score * 100).toFixed(0)}%</div>` : ''}
+                  ${scoringBreakdown.school_score ? `<div>School Access: ${(scoringBreakdown.school_score * 100).toFixed(0)}%</div>` : ''}
+                </div>
+              </div>
+            ` : ''}
+            
+            <div style="font-size: 10px; color: #666; margin-top: 8px; border-top: 1px solid #eee; padding-top: 6px;">
+              💡 Higher scores indicate better suitability for residential development
             </div>
           </div>
         `
       });
 
-      infoWindow.setPosition(event.latLng);
-      infoWindow.open(mapInstance);
+      try {
+        infoWindow.setPosition(event.latLng);
+        infoWindow.open(mapInstance);
+        console.log('✅ Info window opened successfully');
+      } catch (error) {
+        console.error('❌ Error opening info window:', error);
+        // Fallback: Simple alert
+        alert(`Hotspot Score: ${score.toFixed(1)}/100\nArea: ${area.toFixed(2)} hectares\nAQI: ${aqi || 'N/A'}`);
+      }
     });
   };
 
