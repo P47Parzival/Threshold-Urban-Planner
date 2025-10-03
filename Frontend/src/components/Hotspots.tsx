@@ -479,9 +479,9 @@ export default function Hotspots() {
                         })()}
                       </div>
                     </div>
-                  )
+                  )}
                   
-                  <div className="analysis-summary" style={{ display: 'none' }}>
+                  <div className="analysis-summary display-none" style={{ display: 'none' }}>
                     {/* This div is needed to maintain the structure but hidden */}
                   </div>
                   {isCachedResult && (

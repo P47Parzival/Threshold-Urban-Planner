@@ -10,6 +10,10 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 import os
 from pathlib import Path
+import warnings
+
+# Suppress sklearn feature name warnings for cleaner logs
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
 
 logger = logging.getLogger(__name__)
 
@@ -126,20 +130,23 @@ class HotspotScoringService:
     ) -> Dict[str, any]:
         """Calculate score using trained ML model"""
         try:
-            # Prepare feature vector
-            features = np.array([[
-                aqi,
-                population_density,
-                distances.get('hospital', 10.0),
-                distances.get('school', 8.0),
-                distances.get('airport', 30.0),
-                distances.get('bus', 5.0),
-                distances.get('railway', 15.0),
-                distances.get('mall', 10.0)
-            ]])
+            # Prepare feature vector with proper column names to avoid sklearn warnings
+            feature_data = {
+                'AQI': aqi,
+                'PopulationDensity': population_density,
+                'DistHospital': distances.get('hospital', 10.0),
+                'DistSchool': distances.get('school', 8.0),
+                'DistAirport': distances.get('airport', 30.0),
+                'DistBus': distances.get('bus', 5.0),
+                'DistRailway': distances.get('railway', 15.0),
+                'DistMall': distances.get('mall', 10.0)
+            }
+            
+            # Create DataFrame with proper feature names (same as training)
+            features_df = pd.DataFrame([feature_data])
             
             # Scale features
-            features_scaled = self.scaler.transform(features)
+            features_scaled = self.scaler.transform(features_df)
             
             # Predict
             score = self.model.predict(features_scaled)[0]
@@ -168,7 +175,8 @@ class HotspotScoringService:
                 "confidence": float(confidence),
                 "method": "ml_model",
                 "breakdown": breakdown,
-                "model_type": str(type(self.model).__name__)
+                "model_type": str(type(self.model).__name__),
+                "input_features": feature_data  # Include input for debugging
             }
             
         except Exception as e:
