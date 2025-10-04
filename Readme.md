@@ -16,11 +16,28 @@ Threshold addresses critical urban planning challenges by providing:
 
 ## 🏗️ System Architecture
 
-### Architecture Diagram
-*[To be added manually]*
+### Architecture Diagrams/ Process Flow
+<tr>
+    <td><img src="Assests/ChatGPT Image Oct 4, 2025, 10_01_44 PM.png" width="600"/></td>
+    <td><img src="Assests/ChatGPT Image Oct 4, 2025, 10_14_41 PM.png" width="600"/></td>
+  </tr>
 
-### Mock Diagrams  
-*[To be added manually]*
+### Application Screenshots
+
+<table>
+  <tr>
+    <td><img src="Assests/Screenshot (82).png" width="300"/></td>
+    <td><img src="Assests/Screenshot (83).png" width="300"/></td>
+  </tr>
+  <tr>
+    <td><img src="Assests/Screenshot (85).png" width="300"/></td>
+    <td><img src="Assests/Screenshot (94).png" width="300"/></td>
+  </tr>
+  <tr>
+    <td><img src="Assests/Screenshot (98).png" width="300"/></td>
+    <td><img src="Assests/Screenshot (84).png" width="300"/></td>
+  </tr>
+</table>
 
 ---
 
