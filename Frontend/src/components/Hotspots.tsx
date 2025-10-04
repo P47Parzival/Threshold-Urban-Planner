@@ -354,11 +354,18 @@ export default function Hotspots() {
       
       console.log('Sending service analysis request:', requestData);
       
+      // Create AbortController for timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
       const resp = await fetch('http://localhost:8000/api/service-analysis/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify(requestData),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId); // Clear timeout if request completes
       
       if (!resp.ok) {
         const errorText = await resp.text();
@@ -378,8 +385,19 @@ export default function Hotspots() {
       
     } catch (err) {
       console.error('Service analysis error:', err);
-      const msg = err instanceof Error ? err.message : String(err);
-      alert(`Error: ${msg}`);
+      
+      let msg = 'Unknown error occurred';
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          msg = 'Request timed out after 60 seconds. Try reducing the area size or grid resolution.';
+        } else {
+          msg = err.message;
+        }
+      } else {
+        msg = String(err);
+      }
+      
+      alert(`❌ Service Analysis Error: ${msg}`);
     } finally {
       setIsAnalyzingServices(false);
     }
@@ -533,7 +551,8 @@ export default function Hotspots() {
               </div>
               
               <div style="font-size: 10px; color: #666; margin-top: 8px; border-top: 1px solid #eee; padding-top: 6px;">
-                📍 Click on green areas to see housing development potential
+                📍 Click on green areas to see housing development potential<br/>
+                🗺️ Data: ${serviceAnalysisData?.data_source || 'Real-time analysis'}
               </div>
             </div>
           `;
@@ -771,7 +790,7 @@ export default function Hotspots() {
                   disabled={isAnalyzingServices || !aoiBounds || selectedServices.length === 0}
                   style={{ width: '100%' }}
                 >
-                  {isAnalyzingServices ? 'Analyzing...' : `Analyze ${selectedServices.length} Service${selectedServices.length > 1 ? 's' : ''}`}
+                  {isAnalyzingServices ? 'Analyzing...' : `Analyze Service${selectedServices.length > 1 ? 's' : ''}`}
                 </button>
               )}
             </div>

@@ -45,9 +45,12 @@ async def analyze_services(request: ServiceAnalysisRequest) -> ServiceAnalysisRe
             await service_analysis_service.initialize()
         
         # Perform the analysis
+        print("🚀 Starting service gap analysis...")
         result = await service_analysis_service.analyze_service_gaps(request)
+        print(f"🎯 Analysis result: {result.total_service_gaps} gaps, success={result.success}")
         
         print(f"✅ Analysis complete: {result.total_service_gaps} gaps found")
+        print(f"📤 Sending response to frontend...")
         return result
         
     except HTTPException:
