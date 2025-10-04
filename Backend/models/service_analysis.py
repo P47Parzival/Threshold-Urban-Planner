@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Literal
+from typing import List, Dict, Optional, Literal, Any
 from enum import Enum
 
 class ServiceType(str, Enum):
@@ -48,3 +48,4 @@ class ServiceAnalysisResponse(BaseModel):
     service_gaps: Dict[str, List[ServiceGap]] = Field(..., description="Detailed gaps by service type")
     processing_time: Optional[float] = None
     data_source: str = Field(default="OpenStreetMap", description="Source of service location data")
+    search_details: Optional[Dict[str, Any]] = Field(default=None, description="Detailed search results for each service type")

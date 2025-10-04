@@ -31,6 +31,9 @@ interface ServiceAnalysisResult {
   total_service_gaps: number;
   analysis_summary: { [key: string]: any };
   service_gaps: { [key: string]: ServiceGap[] };
+  processing_time?: number;
+  data_source?: string;
+  search_details?: { [key: string]: any };
 }
 
 const getScoreColors = (score: number) => {
@@ -67,12 +70,18 @@ export default function Hotspots() {
   const [analysisResults, setAnalysisResults] = useState<any>(null);
 
   // Service analysis state
-  const [selectedServices, setSelectedServices] = useState<string[]>(['parks', 'food']);
+  const [selectedServices, setSelectedServices] = useState<string[]>(['parks', 'food', 'healthcare', 'transport']);
   const [serviceAnalysisData, setServiceAnalysisData] = useState<ServiceAnalysisResult | null>(null);
   const [isAnalyzingServices, setIsAnalyzingServices] = useState(false);
+  
+  // Housing analysis state
+  const [includeHousing, setIncludeHousing] = useState<boolean>(true);
 
   // Holds a reusable InfoWindow
   const [infoWindow, setInfoWindow] = useState<any>(null);
+  
+  // Map type selection
+  const [mapType, setMapType] = useState<string>('roadmap');
 
   const defaultProps = {
     center: { lat: 23.218682, lng: 72.607738 },
@@ -117,6 +126,9 @@ export default function Hotspots() {
       console.log('Test click on data layer:', evt);
     });
 
+    // Set initial map type
+    (map as any).setMapTypeId(mapType);
+
     (maps as any).event.addListener(drawingMgr, 'polygoncomplete', (polygon: any) => {
       if (aoiPolygon) {
         aoiPolygon.setMap(null);
@@ -159,6 +171,29 @@ export default function Hotspots() {
       mapInstance.data.forEach((feat: any) => {
         mapInstance.data.remove(feat);
       });
+    }
+  };
+
+  // Clear housing data when housing checkbox is unchecked
+  const handleHousingToggle = () => {
+    const newValue = !includeHousing;
+    setIncludeHousing(newValue);
+    
+    if (!newValue) {
+      // Clear housing data when unchecked
+      setVacantLandData([]);
+      setAnalysisResults(null);
+      
+      // Remove housing polygons from map but keep service markers
+      if (mapInstance && mapInstance.data) {
+        const features = [];
+        mapInstance.data.forEach((feat: any) => {
+          if (feat.getProperty('gap_type') !== 'service_gap') {
+            features.push(feat);
+          }
+        });
+        features.forEach(feat => mapInstance.data.remove(feat));
+      }
     }
   };
 
@@ -450,10 +485,10 @@ export default function Hotspots() {
         
         // Different colors for different service types and need levels
         const serviceColors = {
-          parks: { high: '#FF5722', medium: '#FF9800', low: '#FFC107' },
-          food: { high: '#9C27B0', medium: '#BA68C8', low: '#E1BEE7' },
-          healthcare: { high: '#F44336', medium: '#EF5350', low: '#FFCDD2' },
-          transport: { high: '#3F51B5', medium: '#5C6BC0', low: '#C5CAE9' }
+          parks: { high: '#2E7D32', medium: '#4CAF50', low: '#81C784' },        // Green shades for parks
+          food: { high: '#E65100', medium: '#FF9800', low: '#FFB74D' },         // Orange shades for food
+          healthcare: { high: '#C62828', medium: '#F44336', low: '#EF5350' },   // Red shades for healthcare  
+          transport: { high: '#1565C0', medium: '#2196F3', low: '#64B5F6' }     // Blue shades for transport
         };
         
         const color = serviceColors[serviceType as keyof typeof serviceColors]?.[needLevel as keyof typeof serviceColors.parks] || '#757575';
@@ -630,6 +665,13 @@ export default function Hotspots() {
     );
   };
 
+  const handleMapTypeChange = (type: string) => {
+    setMapType(type);
+    if (mapInstance) {
+      (mapInstance as any).setMapTypeId(type);
+    }
+  };
+
   if (!googleMapsApiKey) {
     return (
       <div className="fullscreen-map-container">
@@ -692,6 +734,94 @@ export default function Hotspots() {
         />
       </div>
 
+      {/* Live Search Results Overlay - Right Side */}
+      {serviceAnalysisData && serviceAnalysisData.search_details && (
+        <div className="search-details-overlay" style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          width: '320px',
+          maxHeight: '70vh',
+          overflowY: 'auto',
+          backgroundColor: 'rgba(30, 30, 30, 0.95)',
+          borderRadius: '8px',
+          padding: '16px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          zIndex: 1000,
+          border: '1px solid #444'
+        }}>
+          <div style={{ 
+            color: '#fff', 
+            fontSize: '14px', 
+            fontWeight: 'bold', 
+            marginBottom: '12px',
+            borderBottom: '1px solid #555',
+            paddingBottom: '8px'
+          }}>
+            🔍 Live Search Results
+          </div>
+          
+          {Object.entries(serviceAnalysisData.search_details).map(([serviceType, details]: [string, any]) => (
+            <div key={serviceType} style={{ marginBottom: '16px' }}>
+              <div style={{ 
+                color: serviceType === 'parks' ? '#4CAF50' : 
+                       serviceType === 'food' ? '#FF9800' :
+                       serviceType === 'healthcare' ? '#F44336' : 
+                       serviceType === 'transport' ? '#2196F3' : '#4CAF50', 
+                fontSize: '12px', 
+                fontWeight: 'bold',
+                marginBottom: '6px'
+              }}>
+                {serviceType === 'parks' ? '🌳 Parks Search' : 
+                 serviceType === 'food' ? '🛒 Food Search' :
+                 serviceType === 'healthcare' ? '🏥 Healthcare Search' : 
+                 serviceType === 'transport' ? '🚌 Transport Search' : serviceType}
+              </div>
+              
+              {details.search_results && details.search_results.map((result: any, idx: number) => (
+                <div key={idx} style={{ 
+                  fontSize: '10px', 
+                  color: result.status === 'OK' ? '#81C784' : 
+                         result.status === 'ZERO_RESULTS' ? '#FFB74D' : '#EF5350',
+                  marginBottom: '2px',
+                  paddingLeft: '8px'
+                }}>
+                  {result.status === 'OK' ? '✅' :
+                   result.status === 'ZERO_RESULTS' ? '⚠️' : '❌'} 
+                  {result.place_type}: {result.count} found
+                  {result.status !== 'OK' && (
+                    <span style={{ color: '#999', marginLeft: '4px' }}>
+                      ({result.status.replace('_', ' ').toLowerCase()})
+                    </span>
+                  )}
+                </div>
+              ))}
+              
+              <div style={{ 
+                fontSize: '10px', 
+                color: '#999', 
+                marginTop: '4px',
+                fontStyle: 'italic'
+              }}>
+                Total: {details.total_found} locations, {details.duplicates_removed} duplicates removed
+              </div>
+            </div>
+          ))}
+          
+          <div style={{ 
+            borderTop: '1px solid #555',
+            paddingTop: '8px',
+            marginTop: '12px',
+            fontSize: '10px',
+            color: '#999',
+            textAlign: 'center'
+          }}>
+            📊 Analysis: {serviceAnalysisData.processing_time?.toFixed(2)}s • 
+            Source: {serviceAnalysisData.data_source}
+          </div>
+        </div>
+      )}
+
       <div className="map-controls-overlay">
         <div className="dashboard-card map-overlay-card">
           <h3>🎯 Hotspots Analysis</h3>
@@ -724,8 +854,8 @@ export default function Hotspots() {
                 <label className="checkbox-item">
                   <input
                     type="checkbox"
-                    checked={true}
-                    readOnly
+                    checked={includeHousing}
+                    onChange={handleHousingToggle}
                   />
                   <span>🏠 Housing Development (Vacant Land)</span>
                 </label> <br />
@@ -754,7 +884,7 @@ export default function Hotspots() {
                     checked={selectedServices.includes('healthcare')}
                     onChange={() => handleServiceToggle('healthcare')}
                   />
-                  <span>🏥 Healthcare Access</span>
+                  <span>🏥 Healthcare & Medical Access</span>
                 </label> <br />
                 
                 <label className="checkbox-item">
@@ -763,8 +893,8 @@ export default function Hotspots() {
                     checked={selectedServices.includes('transport')}
                     onChange={() => handleServiceToggle('transport')}
                   />
-                  <span>🚌 Public Transport Access</span>
-                </label>
+                  <span>🚌 Public Transport & Airports</span>
+                </label> <br />
               </div>
             </div>
           </div>
@@ -772,16 +902,35 @@ export default function Hotspots() {
           <div className="setting-divider"></div>
 
           <div className="setting-item">
+            <label>Map Type</label>
+            <select 
+              className="setting-select" 
+              value={mapType}
+              onChange={(e) => handleMapTypeChange(e.target.value)}
+              style={{ width: '100%', marginTop: '4px' }}
+            >
+              <option value="roadmap">🗺️ Roadmap</option>
+              <option value="satellite">🛰️ Satellite</option>
+              <option value="hybrid">🌍 Hybrid</option>
+              <option value="terrain">⛰️ Terrain</option>
+            </select>
+          </div>
+
+          <div className="setting-divider"></div>
+
+          <div className="setting-item">
             <label>Run Analysis</label>
             <div className="analysis-buttons">
-              <button
-                className={`action-btn primary ${isAnalyzing ? 'analyzing' : ''}`}
-                onClick={analyzeVacantLand}
-                disabled={isAnalyzing || !aoiBounds}
-                style={{ width: '100%', marginBottom: '8px' }}
-              >
-                {isAnalyzing ? 'Analyzing...' : 'Find Housing Hotspots'}
-              </button>
+              {includeHousing && (
+                <button
+                  className={`action-btn primary ${isAnalyzing ? 'analyzing' : ''}`}
+                  onClick={analyzeVacantLand}
+                  disabled={isAnalyzing || !aoiBounds}
+                  style={{ width: '100%', marginBottom: '8px' }}
+                >
+                  {isAnalyzing ? 'Analyzing...' : 'Find Housing Hotspots'}
+                </button>
+              )}
               
               {selectedServices.length > 0 && (
                 <button
@@ -802,7 +951,7 @@ export default function Hotspots() {
               <div className="setting-item">
                 <label>📊 Analysis Results</label>
                 
-                {analysisResults && (
+                {analysisResults && includeHousing && (
                   <div className="analysis-summary">
                     <div className="metric-item">
                       <span className="metric-value">{vacantLandData.length}</span>
@@ -841,6 +990,100 @@ export default function Hotspots() {
                   </div>
                 )}
               </div>
+              
+              {/* Detailed Results Scrollable Box */}
+              {serviceAnalysisData && serviceAnalysisData.total_service_gaps > 0 && (
+                <>
+                  <div className="setting-divider"></div>
+                  <div className="setting-item">
+                    <label>📋 Detailed Gap Analysis</label>
+                    <div 
+                      className="detailed-results-box"
+                      style={{
+                        height: '200px',
+                        width: '100%',
+                        overflowY: 'auto',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        padding: '8px',
+                        backgroundColor: '#f9f9f9',
+                        fontSize: '11px',
+                        marginTop: '8px'
+                      }}
+                    >
+                      {Object.entries(serviceAnalysisData.service_gaps).map(([serviceType, gaps]: [string, any[]]) => (
+                        <div key={serviceType} style={{ marginBottom: '12px' }}>
+                          <div style={{ 
+                            fontWeight: 'bold', 
+                            color: '#333', 
+                            borderBottom: '1px solid #ccc',
+                            paddingBottom: '4px',
+                            marginBottom: '6px'
+                          }}>
+                            {serviceType === 'parks' ? '🌳 Parks Gaps' : 
+                             serviceType === 'food' ? '🛒 Food Gaps' :
+                             serviceType === 'healthcare' ? '🏥 Healthcare Gaps' : 
+                             serviceType === 'transport' ? '🚌 Transport Gaps' : serviceType}
+                            ({gaps.length} gaps)
+                          </div>
+                          {gaps.slice(0, 5).map((gap: any, idx: number) => (
+                            <div 
+                              key={idx} 
+                              style={{ 
+                                marginBottom: '6px',
+                                padding: '4px',
+                                backgroundColor: gap.need_level === 'high' ? '#ffebee' : '#fff3e0',
+                                borderRadius: '3px',
+                                borderLeft: `3px solid ${gap.need_level === 'high' ? '#f44336' : '#ff9800'}`
+                              }}
+                            >
+                              <div style={{ fontWeight: '500', color: '#333' }}>
+                                📍 ({gap.center_lat.toFixed(4)}, {gap.center_lng.toFixed(4)})
+                              </div>
+                              <div style={{ color: '#666', fontSize: '10px' }}>
+                                Distance: {gap.distance_to_nearest.toFixed(1)}km • 
+                                Priority: <span style={{ 
+                                  color: gap.need_level === 'high' ? '#f44336' : '#ff9800',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {gap.need_level.toUpperCase()}
+                                </span>
+                              </div>
+                              <div style={{ color: '#555', fontSize: '10px', marginTop: '2px' }}>
+                                {gap.recommendation.length > 80 
+                                  ? gap.recommendation.substring(0, 80) + '...' 
+                                  : gap.recommendation}
+                              </div>
+                            </div>
+                          ))}
+                          {gaps.length > 5 && (
+                            <div style={{ 
+                              color: '#888', 
+                              fontSize: '10px', 
+                              fontStyle: 'italic',
+                              textAlign: 'center',
+                              padding: '4px'
+                            }}>
+                              ... and {gaps.length - 5} more gaps
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      <div style={{ 
+                        textAlign: 'center', 
+                        color: '#666', 
+                        fontSize: '10px',
+                        marginTop: '8px',
+                        borderTop: '1px solid #ddd',
+                        paddingTop: '6px'
+                      }}>
+                        📊 Analysis completed in {serviceAnalysisData.processing_time?.toFixed(2)}s using {serviceAnalysisData.data_source}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -870,19 +1113,19 @@ export default function Hotspots() {
                   📍 Service Gaps (High Priority)
                 </div>
                 <div className="legend-item">
-                  <span className="legend-color" style={{ backgroundColor: '#FF5722', borderRadius: '50%', width: '12px', height: '12px' }}></span>
+                  <span className="legend-color" style={{ backgroundColor: '#2E7D32', borderRadius: '50%', width: '12px', height: '12px' }}></span>
                   <span className="legend-text">🌳 Parks</span>
                 </div>
                 <div className="legend-item">
-                  <span className="legend-color" style={{ backgroundColor: '#9C27B0', borderRadius: '50%', width: '12px', height: '12px' }}></span>
+                  <span className="legend-color" style={{ backgroundColor: '#E65100', borderRadius: '50%', width: '12px', height: '12px' }}></span>
                   <span className="legend-text">🛒 Food</span>
                 </div>
                 <div className="legend-item">
-                  <span className="legend-color" style={{ backgroundColor: '#F44336', borderRadius: '50%', width: '12px', height: '12px' }}></span>
+                  <span className="legend-color" style={{ backgroundColor: '#C62828', borderRadius: '50%', width: '12px', height: '12px' }}></span>
                   <span className="legend-text">🏥 Healthcare</span>
                 </div>
                 <div className="legend-item">
-                  <span className="legend-color" style={{ backgroundColor: '#3F51B5', borderRadius: '50%', width: '12px', height: '12px' }}></span>
+                  <span className="legend-color" style={{ backgroundColor: '#1565C0', borderRadius: '50%', width: '12px', height: '12px' }}></span>
                   <span className="legend-text">🚌 Transport</span>
                 </div>
               </div>
