@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import auth, users, population, aqi, vacant_land
+from api.routes import auth, users, population, aqi, vacant_land, service_analysis
 from database.connection import connect_to_database, close_database_connection
 from services.gee_service import gee_service
 from services.hotspots_service import hotspots_service
 from services.hotspot_scoring_service import hotspot_scoring_service
 from services.distance_service import distance_service
+from services.service_analysis_service import service_analysis_service
 import uvicorn
 import logging
 
@@ -69,6 +70,10 @@ async def startup_event():
     print("📍 Initializing Distance Calculation Service...")
     await distance_service.initialize()
     
+    # Initialize Service Analysis Service
+    print("🏢 Initializing Service Analysis Service...")
+    await service_analysis_service.initialize()
+    
     print("🎯 Backend startup complete!")
     print("="*80)
 
@@ -85,6 +90,7 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(population.router, prefix="/api/population", tags=["population"])
 app.include_router(aqi.router, prefix="/api/aqi", tags=["air-quality"])
 app.include_router(vacant_land.router, prefix="/api/vacant-land", tags=["vacant-land"])
+app.include_router(service_analysis.router, prefix="/api/service-analysis", tags=["service-analysis"])
 
 @app.get("/")
 async def root():

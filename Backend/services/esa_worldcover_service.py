@@ -392,6 +392,9 @@ class ESAWorldCoverService:
                         scoring_breakdown = scoring_result.get("breakdown", {})
                         
                         print(f"📊 Polygon {i} data: score={hotspot_score}, aqi={aqi_value}, distances={len(distances)} items")
+                        print(f"📊 AQI data structure: {aqi_data}")
+                        print(f"📊 Scoring method: {scoring_method}")
+                        print(f"📊 Will send to frontend - aqi: {aqi_value}, method: {scoring_method}")
                         
                         processed.append({
                             "id": f"gee_vacant_{i}",
