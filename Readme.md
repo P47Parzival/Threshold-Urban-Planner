@@ -14,6 +14,11 @@ Threshold addresses critical urban planning challenges by providing:
 
 ---
 
+## AQI Calculation
+### PM 2.5 + PM 10+ NO2 + SO2 + CO = AQI
+<img src="Assests/NASA_space_apps.gif" width="200"/><br />
+### AQI = [(Ihigh − Ilow) / (Chigh − Clow)] × (C − Clow) + Ilow
+
 ## 🏗️ System Architecture
 
 ### Architecture Diagrams/ Process Flow
