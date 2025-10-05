@@ -23,7 +23,7 @@ async function initMap() {
 
 // Load the API script (async for better performance)
 const script = document.createElement('script');
-script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDcmtmHLCqgSiB3IwhVNw8_aV639cFgdDE&libraries=marker&loading=async&callback=initMap&v=alpha`;
+
 document.head.appendChild(script);
 
 

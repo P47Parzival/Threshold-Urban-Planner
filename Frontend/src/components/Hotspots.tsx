@@ -36,6 +36,39 @@ interface ServiceAnalysisResult {
   search_details?: { [key: string]: any };
 }
 
+interface SolarPolygon {
+  id: string;
+  geometry: { [key: string]: any };
+  properties: {
+    area_hectares: number;
+    area_m2: number;
+    solar_score: number;
+    suitability_category: string;
+    estimated_capacity_mw: number;
+    annual_generation_mwh: number;
+    co2_offset_tons: number;
+    analysis_type: string;
+  };
+}
+
+interface SolarAnalysisResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  solar_polygons: SolarPolygon[];
+  summary?: {
+    total_suitable_area_hectares: number;
+    total_estimated_capacity_mw: number;
+    total_annual_generation_mwh: number;
+    total_co2_offset_tons_per_year: number;
+    average_solar_score: number;
+  };
+  statistics?: { [key: string]: any };
+  analysis_date?: string;
+  data_source?: string;
+  processing_time?: number;
+}
+
 const getScoreColors = (score: number) => {
   if (score >= 80) {
     return { fillColor: '#4CAF50', strokeColor: '#2E7D32' };
@@ -73,6 +106,11 @@ export default function Hotspots() {
   const [selectedServices, setSelectedServices] = useState<string[]>(['parks', 'food', 'healthcare', 'transport']);
   const [serviceAnalysisData, setServiceAnalysisData] = useState<ServiceAnalysisResult | null>(null);
   const [isAnalyzingServices, setIsAnalyzingServices] = useState(false);
+  
+  // Solar analysis state
+  const [solarAnalysisData, setSolarAnalysisData] = useState<SolarAnalysisResult | null>(null);
+  const [isAnalyzingSolar, setIsAnalyzingSolar] = useState(false);
+  const [includeSolar, setIncludeSolar] = useState<boolean>(true);
   
   // Housing analysis state
   const [includeHousing, setIncludeHousing] = useState<boolean>(true);
@@ -166,6 +204,7 @@ export default function Hotspots() {
     setVacantLandData([]);
     setAnalysisResults(null);
     setServiceAnalysisData(null);
+    setSolarAnalysisData(null);
 
     if (mapInstance && mapInstance.data) {
       mapInstance.data.forEach((feat: any) => {
@@ -535,7 +574,58 @@ export default function Hotspots() {
         const feat = evt.feature;
         const gapType = feat.getProperty('gap_type');
         
-        if (gapType === 'service_gap') {
+        const analysisType = feat.getProperty('analysis_type');
+        
+        if (analysisType === 'solar_potential') {
+          // Handle solar polygon click
+          const solarScore = feat.getProperty('solar_score');
+          const suitabilityCategory = feat.getProperty('suitability_category');
+          const areaHectares = feat.getProperty('area_hectares');
+          const estimatedCapacity = feat.getProperty('estimated_capacity_mw');
+          const annualGeneration = feat.getProperty('annual_generation_mwh');
+          const co2Offset = feat.getProperty('co2_offset_tons');
+          
+          console.log('📊 Solar Polygon InfoWindow data:', {
+            solarScore, suitabilityCategory, areaHectares, estimatedCapacity
+          });
+
+          const content = `
+            <div style="padding:12px; font-family:Arial, sans-serif; max-width:320px;">
+              <h4 style="margin:0 0 8px 0; color:#FF8F00; display: flex; align-items: center;">
+                ☀️ Solar Generation Potential
+              </h4>
+              
+              <div style="background: #fff3e0; padding: 8px; border-radius: 4px; margin: 8px 0;">
+                <div style="color:#333;"><strong>Solar Score:</strong> ${solarScore}/100</div>
+                <div style="color:#333;"><strong>Suitability:</strong> ${suitabilityCategory}</div>
+                <div style="color:#333;"><strong>Area:</strong> ${areaHectares} hectares</div>
+              </div>
+              
+              <div style="background: #e8f5e8; padding: 8px; border-radius: 4px; margin: 8px 0;">
+                <h5 style="margin: 0 0 6px 0; color: #2E7D32; font-size: 12px;">⚡ Generation Estimates</h5>
+                <div style="color:#333; font-size: 11px;"><strong>Capacity:</strong> ${estimatedCapacity} MW</div>
+                <div style="color:#333; font-size: 11px;"><strong>Annual Generation:</strong> ${annualGeneration} MWh</div>
+                <div style="color:#333; font-size: 11px;"><strong>CO₂ Offset:</strong> ${co2Offset} tons/year</div>
+              </div>
+              
+              <div style="font-size: 10px; color: #666; margin-top: 8px; border-top: 1px solid #eee; padding-top: 6px;">
+                📊 Analysis: NASA POWER + ESA WorldCover + USGS SRTM<br/>
+                🌞 Based on solar irradiance, slope, and land cover data
+              </div>
+            </div>
+          `;
+
+          if (!infoWindow) {
+            console.error('❌ infoWindow is not initialized');
+            return;
+          }
+
+          infoWindow.setContent(content);
+          infoWindow.setPosition(evt.latLng);
+          infoWindow.open(mapInstance);
+          console.log('✅ Solar Polygon InfoWindow opened');
+
+        } else if (gapType === 'service_gap') {
           // Handle service gap click
           const serviceType = feat.getProperty('service_type');
           const needLevel = feat.getProperty('need_level');
@@ -653,6 +743,152 @@ export default function Hotspots() {
       } catch (err) {
         console.error('❌ Error in click handler:', err);
         alert('Feature clicked - InfoWindow error, check console');
+      }
+    });
+  };
+
+  const analyzeSolar = async () => {
+    if (!aoiPolygon) {
+      alert('Please select an Area of Interest first');
+      return;
+    }
+    
+    setIsAnalyzingSolar(true);
+    try {
+      const aoiGeoJSON = convertPolygonToGeoJSON(aoiPolygon);
+      console.log('Sending AOI for solar analysis:', aoiGeoJSON);
+
+      const resp = await fetch('http://localhost:8000/api/solar-analysis/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aoi: aoiGeoJSON })
+      });
+      
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        throw new Error(`Solar analysis failed: ${resp.status} - ${errorText}`);
+      }
+      
+      const data = await resp.json();
+      console.log('Solar analysis results:', data);
+      setSolarAnalysisData(data);
+      
+      if (data.success && data.solar_polygons && data.solar_polygons.length > 0) {
+        displaySolarPolygons(data.solar_polygons);
+        alert(`✅ Found ${data.solar_polygons.length} suitable solar areas! Total capacity: ${data.summary?.total_estimated_capacity_mw?.toFixed(1)} MW`);
+      } else if (data.success) {
+        alert('✅ Solar analysis completed, but no highly suitable areas found in this region.');
+      } else {
+        alert(`❌ Solar analysis failed: ${data.error || 'Unknown error'}`);
+      }
+      
+    } catch (err) {
+      console.error('Solar analysis error:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`❌ Solar Analysis Error: ${msg}`);
+    } finally {
+      setIsAnalyzingSolar(false);
+    }
+  };
+
+  const displaySolarPolygons = (solarPolygons: SolarPolygon[]) => {
+    if (!mapInstance || !mapInstance.data) {
+      console.error('Map not ready for solar polygon display');
+      return;
+    }
+
+    console.log('Displaying solar polygons:', solarPolygons.length);
+
+    // Add solar polygons to the map
+    solarPolygons.forEach((solarPoly, idx) => {
+      const feature = {
+        type: 'Feature',
+        properties: {
+          id: solarPoly.id,
+          analysis_type: 'solar_potential',
+          solar_score: solarPoly.properties.solar_score,
+          suitability_category: solarPoly.properties.suitability_category,
+          area_hectares: solarPoly.properties.area_hectares,
+          estimated_capacity_mw: solarPoly.properties.estimated_capacity_mw,
+          annual_generation_mwh: solarPoly.properties.annual_generation_mwh,
+          co2_offset_tons: solarPoly.properties.co2_offset_tons
+        },
+        geometry: solarPoly.geometry
+      };
+
+      try {
+        mapInstance.data.addGeoJson(feature);
+        console.log(`✅ Added solar polygon ${idx + 1}`);
+      } catch (err) {
+        console.error(`Error adding solar polygon ${idx + 1}:`, err);
+      }
+    });
+
+    // Update map styling to handle solar polygons
+    mapInstance.data.setStyle((feat: any) => {
+      const analysisType = feat.getProperty('analysis_type');
+      const gapType = feat.getProperty('gap_type');
+      
+      if (analysisType === 'solar_potential') {
+        // Solar polygon styling - yellow/orange gradient based on score
+        const score = feat.getProperty('solar_score') || 0;
+        let fillColor = '#FFC107'; // Default yellow
+        
+        if (score >= 80) {
+          fillColor = '#FF8F00'; // Dark orange for excellent
+        } else if (score >= 60) {
+          fillColor = '#FFA000'; // Orange for very good
+        } else if (score >= 40) {
+          fillColor = '#FFB300'; // Light orange for good
+        } else {
+          fillColor = '#FFC107'; // Yellow for fair
+        }
+        
+        return {
+          fillColor,
+          fillOpacity: 0.7,
+          strokeColor: '#E65100',
+          strokeOpacity: 0.9,
+          strokeWeight: 2,
+          clickable: true
+        };
+      } else if (gapType === 'service_gap') {
+        // Existing service gap styling
+        const needLevel = feat.getProperty('need_level');
+        const serviceType = feat.getProperty('service_type');
+        
+        const serviceColors = {
+          parks: { high: '#2E7D32', medium: '#4CAF50', low: '#81C784' },
+          food: { high: '#E65100', medium: '#FF9800', low: '#FFB74D' },
+          healthcare: { high: '#C62828', medium: '#F44336', low: '#EF5350' },
+          transport: { high: '#1565C0', medium: '#2196F3', low: '#64B5F6' }
+        };
+        
+        const color = serviceColors[serviceType as keyof typeof serviceColors]?.[needLevel as keyof typeof serviceColors.parks] || '#757575';
+        
+        return {
+          icon: {
+            path: 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z',
+            fillColor: color,
+            fillOpacity: 0.9,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 2,
+            scale: 1.0
+          },
+          clickable: true
+        };
+      } else {
+        // Existing vacant land styling
+        const s = feat.getProperty('score') || 0;
+        const { fillColor, strokeColor } = getScoreColors(s);
+        return {
+          fillColor,
+          fillOpacity: 0.6,
+          strokeColor,
+          strokeOpacity: 0.9,
+          strokeWeight: 3,
+          clickable: true
+        };
       }
     });
   };
@@ -895,6 +1131,15 @@ export default function Hotspots() {
                   />
                   <span>🚌 Public Transport & Airports</span>
                 </label> <br />
+                
+                <label className="checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={includeSolar}
+                    onChange={() => setIncludeSolar(!includeSolar)}
+                  />
+                  <span>☀️ Solar Generation Potential</span>
+                </label> <br />
               </div>
             </div>
           </div>
@@ -937,15 +1182,30 @@ export default function Hotspots() {
                   className={`action-btn secondary ${isAnalyzingServices ? 'analyzing' : ''}`}
                   onClick={analyzeServices}
                   disabled={isAnalyzingServices || !aoiBounds || selectedServices.length === 0}
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', marginBottom: '8px' }}
                 >
                   {isAnalyzingServices ? 'Analyzing...' : `Analyze Service${selectedServices.length > 1 ? 's' : ''}`}
+                </button>
+              )}
+              
+              {includeSolar && (
+                <button
+                  className={`action-btn ${isAnalyzingSolar ? 'analyzing' : ''}`}
+                  onClick={analyzeSolar}
+                  disabled={isAnalyzingSolar || !aoiBounds}
+                  style={{ 
+                    width: '100%', 
+                    backgroundColor: '#FF8F00',
+                    borderColor: '#FF8F00'
+                  }}
+                >
+                  {isAnalyzingSolar ? 'Analyzing Solar...' : 'Analyze Solar Potential'}
                 </button>
               )}
             </div>
           </div>
 
-          {(analysisResults || serviceAnalysisData) && (
+          {(analysisResults || serviceAnalysisData || solarAnalysisData) && (
             <>
               <div className="setting-divider"></div>
               <div className="setting-item">
@@ -987,6 +1247,27 @@ export default function Hotspots() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+                
+                {solarAnalysisData && solarAnalysisData.success && (
+                  <div className="solar-analysis-summary">
+                    <div className="metric-item">
+                      <span className="metric-value">{solarAnalysisData.solar_polygons.length}</span>
+                      <span className="metric-label">Solar Areas</span>
+                    </div>
+                    <div className="metric-item">
+                      <span className="metric-value">
+                        {solarAnalysisData.summary?.total_estimated_capacity_mw?.toFixed(1) ?? '0'}
+                      </span>
+                      <span className="metric-label">Total MW</span>
+                    </div>
+                    <div className="metric-item">
+                      <span className="metric-value">
+                        {solarAnalysisData.summary?.total_co2_offset_tons_per_year?.toFixed(0) ?? '0'}
+                      </span>
+                      <span className="metric-label">CO₂ Offset (tons/yr)</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1108,7 +1389,7 @@ export default function Hotspots() {
 
             {/* Service Gaps Legend */}
             {serviceAnalysisData && serviceAnalysisData.total_service_gaps > 0 && (
-              <div>
+              <div style={{ marginBottom: '12px' }}>
                 <div style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '4px', color: '#555' }}>
                   📍 Service Gaps (High Priority)
                 </div>
@@ -1127,6 +1408,31 @@ export default function Hotspots() {
                 <div className="legend-item">
                   <span className="legend-color" style={{ backgroundColor: '#1565C0', borderRadius: '50%', width: '12px', height: '12px' }}></span>
                   <span className="legend-text">🚌 Transport</span>
+                </div>
+              </div>
+            )}
+
+            {/* Solar Generation Legend */}
+            {solarAnalysisData && solarAnalysisData.solar_polygons.length > 0 && (
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '4px', color: '#555' }}>
+                  ☀️ Solar Generation Potential
+                </div>
+                <div className="legend-item">
+                  <span className="legend-color" style={{ backgroundColor: '#FF8F00' }}></span>
+                  <span className="legend-text">Excellent (80-100)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-color" style={{ backgroundColor: '#FFA000' }}></span>
+                  <span className="legend-text">Very Good (60-80)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-color" style={{ backgroundColor: '#FFB300' }}></span>
+                  <span className="legend-text">Good (40-60)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-color" style={{ backgroundColor: '#FFC107' }}></span>
+                  <span className="legend-text">Fair (20-40)</span>
                 </div>
               </div>
             )}
