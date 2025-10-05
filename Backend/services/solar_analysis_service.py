@@ -34,94 +34,198 @@ class SolarAnalysisService:
 
     def _compute_solar_suitability(self, aoi_geojson: Dict) -> Dict:
         """
-        Compute solar suitability using Google Earth Engine
-        Based on solar irradiance, slope, and land cover
+        Compute comprehensive solar suitability using Solar Suitability Index (SSI)
+        Based on irradiance, slope, aspect, landcover, and shading factors
         """
         try:
             # Convert AOI to Earth Engine geometry
             aoi = ee.Geometry(aoi_geojson['geometry'])
             
-            logger.info("🌞 Starting solar suitability analysis...")
+            logger.info("🌞 Starting comprehensive solar suitability analysis...")
             
-            # 1. Load datasets
-            # Solar irradiance data (NASA POWER)
-            # ✅ Solar irradiance data (ECMWF ERA5-Land)
-            # 1. Load datasets
-            # ✅ Solar irradiance data (ECMWF ERA5-Land)
-            solar_collection = ee.ImageCollection("ECMWF/ERA5_LAND/DAILY_AGGR") \
+            # Check area size and adjust parameters accordingly
+            aoi_area = aoi.area(maxError=1).getInfo()  # Area in square meters
+            aoi_area_km2 = aoi_area / 1e6  # Convert to km²
+            
+            logger.info(f"📏 Analysis area: {aoi_area_km2:.1f} km²")
+            
+            # Dynamic parameters based on area size
+            if aoi_area_km2 > 1000:  # Very large area (>1000 km²)
+                SCALE = 200
+                TOP_PERCENT = 5
+                MIN_AREA_M2 = 10000
+                MAX_PIXELS = 5e8
+                logger.info("🔧 Using ultra-fast settings for very large area")
+            elif aoi_area_km2 > 500:  # Large area (500-1000 km²)
+                SCALE = 150
+                TOP_PERCENT = 8
+                MIN_AREA_M2 = 7500
+                MAX_PIXELS = 7e8
+                logger.info("🔧 Using fast settings for large area")
+            elif aoi_area_km2 > 100:  # Medium area (100-500 km²)
+                SCALE = 100
+                TOP_PERCENT = 10
+                MIN_AREA_M2 = 5000
+                MAX_PIXELS = 1e9
+                logger.info("🔧 Using balanced settings for medium area")
+            else:  # Small area (<100 km²)
+                SCALE = 50
+                TOP_PERCENT = 15
+                MIN_AREA_M2 = 2000
+                MAX_PIXELS = 2e9
+                logger.info("🔧 Using detailed settings for small area")
+            
+            YEAR = 2024
+            
+            # 1. DATASETS
+            # ERA5-Land daily aggregated solar radiation
+            era5 = ee.ImageCollection("ECMWF/ERA5_LAND/DAILY_AGGR") \
                 .select("surface_solar_radiation_downwards_sum") \
-                .filterDate('2024-01-01', '2024-12-31')
-
-            # Convert from J/m² → kWh/m²/day
-            solar_mean = solar_collection.mean().divide(3.6e6)
-
-            # DEM for slope calculation
-            dem = ee.Image("USGS/SRTMGL1_003")
-            slope = ee.Terrain.slope(dem)
-
-            # ESA WorldCover for land types
-            landcover = ee.Image("ESA/WorldCover/v200/2021").select("Map")
-
-            # Mask suitable land types (bare = 60, grass = 30, cropland = 40)
-            suitable_land = landcover.eq(60).Or(landcover.eq(30)).Or(landcover.eq(40))
-
-            # Solar irradiance (ERA5-Land)
-            solar_irradiance = solar_mean.select("surface_solar_radiation_downwards_sum")
-
-            # Apply slope factor
-            slope_rad = slope.multiply(3.14159 / 180)
-            slope_factor = slope_rad.cos()
-
-            # Combine irradiance & slope
-            suitability_raw = solar_irradiance.multiply(slope_factor)
-
-            # Mask by suitable land
-            suitability_masked = suitability_raw.multiply(suitable_land)
-
-            # Normalize (2–8 kWh/m²/day is typical global solar potential range)
-            suitability_normalized = suitability_masked.unitScale(2, 8).clamp(0, 1)
-
-            # 8. Create high suitability areas (threshold > 0.6)
-            high_suitability = suitability_normalized.gt(0.6)
+                .filterDate(ee.Date.fromYMD(YEAR, 1, 1), ee.Date.fromYMD(YEAR, 12, 31))
             
-            # 9. Convert to vectors (polygons)
-            vectors = high_suitability.selfMask().reduceToVectors(
+            # Mean solar energy (J/m²/day) -> convert to kWh/m²/day
+            solar_mean = era5.mean().divide(3.6e6).rename('solar_kWh_m2_day')
+            
+            # DEM & derivatives
+            dem = ee.Image("USGS/SRTMGL1_003")
+            slope = ee.Terrain.slope(dem).rename('slope_deg')
+            aspect = ee.Terrain.aspect(dem).rename('aspect_deg')
+            
+            # Landcover (WorldCover 2021)
+            wc = ee.Image("ESA/WorldCover/v200/2021").select('Map').rename('worldcover')
+            
+            # 2. SUB-SCORES (0..1)
+            # Solar irradiance score: normalize 2..8 kWh/m²/day -> 0..1
+            S_irr = solar_mean.unitScale(2, 8).clamp(0, 1).rename('S_irr')
+            
+            # Slope score: prefer flatter areas (0° -> 1, 30° -> 0)
+            S_slope = slope.multiply(-1).divide(30).add(1).clamp(0, 1).rename('S_slope')
+            
+            # Aspect score: best near south (180°) for northern hemisphere
+            aspect_diff = aspect.subtract(180).abs()
+            S_aspect = aspect_diff.divide(90).multiply(-1).add(1).clamp(0, 1).rename('S_aspect')
+            
+            # Landcover suitability (graded scoring)
+            lc = wc
+            S_land = ee.Image(0).rename('S_land') \
+                .where(lc.eq(60), 1.0) \
+                .where(lc.eq(30), 0.9) \
+                .where(lc.eq(40), 0.7) \
+                .where(lc.eq(50), 0.3) \
+                .where(lc.eq(10), 0.2) \
+                .where(lc.eq(80), 0.0)
+            
+            # Shade proxy: penalty for steep local relief
+            S_shade = S_slope.rename('S_shade')
+            
+            # 3. COMBINE into Solar Suitability Index (SSI)
+            # Weights (sum to 1.0)
+            w_irr = 0.30      # Solar irradiance (most important)
+            w_slope = 0.20    # Slope suitability
+            w_aspect = 0.15   # Aspect orientation
+            w_shade = 0.15    # Shading considerations
+            w_land = 0.20     # Land cover suitability
+            
+            SSI = S_irr.multiply(w_irr) \
+                .add(S_slope.multiply(w_slope)) \
+                .add(S_aspect.multiply(w_aspect)) \
+                .add(S_shade.multiply(w_shade)) \
+                .add(S_land.multiply(w_land)) \
+                .rename('ssi') \
+                .clip(aoi)
+            
+            # 4. COMPUTE THRESHOLD for top N% within AOI
+            perc = 100 - TOP_PERCENT
+            percentile_reducer = ee.Reducer.percentile([perc])
+            
+            threshold_dict = SSI.reduceRegion(
+                reducer=percentile_reducer,
                 geometry=aoi,
-                scale=100,  # 100m resolution
-                geometryType='polygon',
-                labelProperty='solar_score',
-                bestEffort=True,
-                maxPixels=1e8
+                scale=SCALE,
+                maxPixels=MAX_PIXELS,
+                bestEffort=True
             )
             
-            # 10. Get additional statistics
-            stats = suitability_normalized.reduceRegion(
+            # Get threshold value
+            threshold_key = f'ssi_p{int(perc)}'
+            threshold = ee.Number(threshold_dict.get(threshold_key, 0.7))  # Default to 0.7 if computation fails
+            
+            logger.info(f"🎯 Using SSI threshold: {threshold.getInfo():.3f} for top {TOP_PERCENT}% areas")
+            
+            # 5. CREATE HIGH SUITABILITY MASK
+            high_suitability = SSI.gte(threshold)
+            
+            # 6. VECTORIZE to polygons - with timeout protection
+            vectors = high_suitability.selfMask().reduceToVectors(
+                geometry=aoi,
+                scale=SCALE,
+                geometryType='polygon',
+                eightConnected=False,
+                labelProperty='ssi_class',
+                maxPixels=MAX_PIXELS,
+                bestEffort=True
+            )
+            
+            # 7. FILTER by minimum area
+            def add_area_and_filter(feature):
+                area = feature.geometry().area(maxError=1)  # 1 meter error margin
+                return feature.set('area_m2', area).set('area_hectares', area.divide(10000))
+            
+            vectors_with_area = vectors.map(add_area_and_filter)
+            filtered_vectors = vectors_with_area.filter(ee.Filter.gte('area_m2', MIN_AREA_M2))
+            
+            # 8. ADD SSI VALUES to each polygon
+            def add_ssi_stats(feature):
+                # Sample SSI statistics within each polygon
+                ssi_stats = SSI.reduceRegion(
+                    reducer=ee.Reducer.mean().combine(ee.Reducer.max(), sharedInputs=True),
+                    geometry=feature.geometry(),
+                    scale=SCALE,
+                    maxPixels=1e6,  # Reduced for individual polygons
+                    bestEffort=True
+                )
+                
+                return feature.set({
+                    'ssi_mean': ssi_stats.get('ssi_mean', 0),
+                    'ssi_max': ssi_stats.get('ssi_max', 0),
+                    'solar_score': ee.Number(ssi_stats.get('ssi_mean', 0)).multiply(100)  # Convert to 0-100 scale
+                })
+            
+            final_vectors = filtered_vectors.map(add_ssi_stats)
+            
+            # 9. GET RESULTS
+            vector_data = final_vectors.getInfo()
+            
+            # Overall statistics
+            overall_stats = SSI.reduceRegion(
                 reducer=ee.Reducer.mean().combine(
                     ee.Reducer.max(), sharedInputs=True
                 ).combine(
                     ee.Reducer.min(), sharedInputs=True
                 ),
                 geometry=aoi,
-                scale=100,
-                maxPixels=1e8
+                scale=SCALE,
+                maxPixels=MAX_PIXELS,
+                bestEffort=True
             )
             
-            # 11. Get results
-            vector_data = vectors.getInfo()
-            stats_data = stats.getInfo()
+            stats_data = overall_stats.getInfo()
             
-            logger.info(f"✅ Solar analysis completed. Found {len(vector_data.get('features', []))} suitable areas")
+            logger.info(f"✅ Solar analysis completed. Found {len(vector_data.get('features', []))} high-suitability solar areas")
             
             return {
                 'success': True,
                 'solar_polygons': vector_data.get('features', []),
                 'statistics': {
-                    'mean_suitability': stats_data.get('ALLSKY_SFC_SW_DWN_mean', 0),
-                    'max_suitability': stats_data.get('ALLSKY_SFC_SW_DWN_max', 0),
-                    'min_suitability': stats_data.get('ALLSKY_SFC_SW_DWN_min', 0)
+                    'mean_ssi': stats_data.get('ssi_mean', 0),
+                    'max_ssi': stats_data.get('ssi_max', 0),
+                    'min_ssi': stats_data.get('ssi_min', 0),
+                    'threshold_used': threshold.getInfo() if threshold else 0.7,
+                    'top_percent': TOP_PERCENT
                 },
                 'analysis_date': datetime.now().isoformat(),
-                'data_source': 'NASA POWER + ESA WorldCover + USGS SRTM'
+                'data_source': 'ECMWF ERA5-Land + ESA WorldCover + USGS SRTM',
+                'methodology': 'Solar Suitability Index (SSI) with multi-factor analysis'
             }
             
         except Exception as e:
@@ -143,13 +247,26 @@ class SolarAnalysisService:
         try:
             logger.info("🔍 Starting solar potential analysis...")
             
-            # Run Earth Engine computation in thread pool
+            # Run Earth Engine computation in thread pool with timeout
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                self.executor, 
-                self._compute_solar_suitability, 
-                aoi_geojson
-            )
+            try:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        self.executor, 
+                        self._compute_solar_suitability, 
+                        aoi_geojson
+                    ),
+                    timeout=180  # 3 minute timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error("❌ Solar analysis timed out after 3 minutes")
+                return {
+                    'success': False,
+                    'error': 'Analysis timed out. Try zooming to a smaller area or use a different map view.',
+                    'solar_polygons': [],
+                    'summary': {},
+                    'statistics': {}
+                }
             
             if not result['success']:
                 return result
@@ -167,10 +284,18 @@ class SolarAnalysisService:
                         area_m2 = self._calculate_polygon_area(coords)
                         area_hectares = area_m2 / 10000
                         
-                        # Estimate solar potential
-                        solar_score = min(1.0, max(0.0, (i + 1) / len(solar_polygons)))  # Simplified scoring
-                        estimated_capacity_mw = area_hectares * 0.5 * solar_score  # ~0.5 MW per hectare for solar farms
-                        annual_generation_mwh = estimated_capacity_mw * 1500 * solar_score  # ~1500 hours equivalent
+                        # Get SSI-based solar score from GEE analysis
+                        properties = polygon.get('properties', {})
+                        ssi_score = properties.get('solar_score', 70)  # Default to 70 if not available
+                        solar_score = min(100.0, max(0.0, float(ssi_score))) / 100.0  # Convert to 0-1 scale
+                        
+                        # More realistic capacity estimation based on SSI score
+                        base_capacity_per_hectare = 0.4  # MW per hectare (conservative for utility-scale)
+                        estimated_capacity_mw = area_hectares * base_capacity_per_hectare * solar_score
+                        
+                        # Annual generation based on capacity factor (varies by solar score)
+                        capacity_factor = 0.15 + (solar_score * 0.10)  # 15-25% capacity factor range
+                        annual_generation_mwh = estimated_capacity_mw * 8760 * capacity_factor  # 8760 hours per year
                         
                         processed_polygon = {
                             'id': f'solar_{i}',
@@ -178,12 +303,16 @@ class SolarAnalysisService:
                             'properties': {
                                 'area_hectares': round(area_hectares, 2),
                                 'area_m2': round(area_m2, 2),
-                                'solar_score': round(solar_score * 100, 1),  # Convert to 0-100 scale
+                                'solar_score': round(ssi_score, 1),  # Keep as 0-100 scale
+                                'ssi_mean': properties.get('ssi_mean', solar_score),
+                                'ssi_max': properties.get('ssi_max', solar_score),
                                 'suitability_category': self._get_suitability_category(solar_score),
                                 'estimated_capacity_mw': round(estimated_capacity_mw, 2),
                                 'annual_generation_mwh': round(annual_generation_mwh, 2),
+                                'capacity_factor': round(capacity_factor, 3),
                                 'co2_offset_tons': round(annual_generation_mwh * 0.4, 2),  # ~0.4 tons CO2 per MWh
-                                'analysis_type': 'solar_potential'
+                                'analysis_type': 'solar_potential',
+                                'methodology': 'SSI'
                             }
                         }
                         processed_polygons.append(processed_polygon)
@@ -200,7 +329,7 @@ class SolarAnalysisService:
             
             return {
                 'success': True,
-                'message': f'Found {len(processed_polygons)} suitable solar areas',
+                'message': f'Found {len(processed_polygons)} solar hotspots in current view',
                 'solar_polygons': processed_polygons,
                 'summary': {
                     'total_suitable_area_hectares': round(total_area, 2),

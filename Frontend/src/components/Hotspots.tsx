@@ -129,7 +129,7 @@ export default function Hotspots() {
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
   const handleApiLoaded = (map: unknown, maps: unknown) => {
-    console.log('Google Maps API loaded', { map, maps });
+    console.log('🗺️ Google Maps API loaded');
     setMapInstance(map);
     setMapsInstance(maps);
 
@@ -159,10 +159,9 @@ export default function Hotspots() {
     drawingMgr.setMap(map);
     setDrawingManager(drawingMgr);
 
-    // Optional: test data click layer
-    (map as any).data.addListener('click', (evt: any) => {
-      console.log('Test click on data layer:', evt);
-    });
+    // Clear any existing data layer listeners immediately
+    (maps as any).event.clearListeners((map as any).data, 'click');
+    console.log('🧹 Cleared any existing data layer listeners');
 
     // Set initial map type
     (map as any).setMapTypeId(mapType);
@@ -291,17 +290,18 @@ export default function Hotspots() {
   };
 
   const displayVacantLandPolygons = (polygons: any[]) => {
-    if (!mapInstance || !mapInstance.data) {
+    if (!mapInstance || !mapInstance.data || !mapsInstance) {
       console.error('Map/data layer not ready');
       return;
     }
-    console.log('Displaying polygons:', polygons.length);
-    // clear existing
+    console.log('🗺️ Displaying vacant land polygons:', polygons.length);
+    
+    // Clear existing features
     mapInstance.data.forEach((f: any) => {
       mapInstance.data.remove(f);
     });
 
-    // Clear old listeners
+    // Clear ALL existing listeners to prevent conflicts
     mapsInstance.event.clearListeners(mapInstance.data, 'click');
 
     polygons.forEach((polyData, idx) => {
@@ -344,12 +344,17 @@ export default function Hotspots() {
       };
     });
 
-    console.log('🖱️ Adding click listener to map data');
+    console.log('🖱️ Adding click listener for vacant land');
     mapInstance.data.addListener('click', (evt: any) => {
-      console.log('🎯 Data click event:', evt);
+      console.log('🎯 Vacant land click event:', evt);
       
       if (!evt || !evt.feature) {
-        console.warn('⚠️ No feature in click event', evt);
+        console.warn('⚠️ No feature in click event');
+        return;
+      }
+
+      if (!infoWindow) {
+        console.error('❌ InfoWindow not initialized');
         return;
       }
 
@@ -590,27 +595,36 @@ export default function Hotspots() {
           });
 
           const content = `
-            <div style="padding:12px; font-family:Arial, sans-serif; max-width:320px;">
-              <h4 style="margin:0 0 8px 0; color:#FF8F00; display: flex; align-items: center;">
+            <div style="padding:14px; font-family:Arial, sans-serif; max-width:350px; line-height: 1.4;">
+              <h4 style="margin:0 0 10px 0; color:#FF8F00; display: flex; align-items: center; font-size: 16px;">
                 ☀️ Solar Generation Potential
               </h4>
               
-              <div style="background: #fff3e0; padding: 8px; border-radius: 4px; margin: 8px 0;">
-                <div style="color:#333;"><strong>Solar Score:</strong> ${solarScore}/100</div>
-                <div style="color:#333;"><strong>Suitability:</strong> ${suitabilityCategory}</div>
-                <div style="color:#333;"><strong>Area:</strong> ${areaHectares} hectares</div>
+              <div style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding: 10px; border-radius: 6px; margin: 10px 0; border-left: 4px solid #FF8F00;">
+                <div style="color:#333; font-size: 13px; margin-bottom: 4px;"><strong>Solar Score:</strong> <span style="color:#FF8F00; font-weight: bold;">${solarScore}/100</span></div>
+                <div style="color:#333; font-size: 13px; margin-bottom: 4px;"><strong>Suitability:</strong> <span style="color:#2E7D32; font-weight: bold;">${suitabilityCategory}</span></div>
+                <div style="color:#333; font-size: 13px;"><strong>Area:</strong> ${areaHectares} hectares (${(areaHectares * 2.47).toFixed(1)} acres)</div>
               </div>
               
-              <div style="background: #e8f5e8; padding: 8px; border-radius: 4px; margin: 8px 0;">
-                <h5 style="margin: 0 0 6px 0; color: #2E7D32; font-size: 12px;">⚡ Generation Estimates</h5>
-                <div style="color:#333; font-size: 11px;"><strong>Capacity:</strong> ${estimatedCapacity} MW</div>
-                <div style="color:#333; font-size: 11px;"><strong>Annual Generation:</strong> ${annualGeneration} MWh</div>
-                <div style="color:#333; font-size: 11px;"><strong>CO₂ Offset:</strong> ${co2Offset} tons/year</div>
+              <div style="background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c8 100%); padding: 10px; border-radius: 6px; margin: 10px 0; border-left: 4px solid #4CAF50;">
+                <h5 style="margin: 0 0 8px 0; color: #2E7D32; font-size: 14px; font-weight: bold;">⚡ Energy Production Estimates</h5>
+                <div style="color:#333; font-size: 12px; margin-bottom: 3px;"><strong>🏭 Installed Capacity:</strong> <span style="color:#1976D2; font-weight: bold;">${estimatedCapacity} MW</span></div>
+                <div style="color:#333; font-size: 12px; margin-bottom: 3px;"><strong>🔋 Annual Generation:</strong> <span style="color:#1976D2; font-weight: bold;">${annualGeneration.toLocaleString()} MWh</span></div>
+                <div style="color:#333; font-size: 12px; margin-bottom: 3px;"><strong>🏠 Powers ~${Math.round(annualGeneration / 11)} homes/year</strong></div>
+                <div style="color:#333; font-size: 12px; margin-bottom: 3px;"><strong>💰 Est. Revenue:</strong> $${(annualGeneration * 50).toLocaleString()}/year</div>
+                <div style="color:#333; font-size: 12px;"><strong>🌱 CO₂ Offset:</strong> <span style="color:#4CAF50; font-weight: bold;">${co2Offset.toLocaleString()} tons/year</span></div>
               </div>
               
-              <div style="font-size: 10px; color: #666; margin-top: 8px; border-top: 1px solid #eee; padding-top: 6px;">
-                📊 Analysis: NASA POWER + ESA WorldCover + USGS SRTM<br/>
-                🌞 Based on solar irradiance, slope, and land cover data
+              <div style="background: #f0f7ff; padding: 8px; border-radius: 4px; margin: 8px 0; border-left: 3px solid #2196F3;">
+                <div style="color:#333; font-size: 11px; margin-bottom: 2px;"><strong>🌤️ Solar Irradiance:</strong> Optimal for this region</div>
+                <div style="color:#333; font-size: 11px; margin-bottom: 2px;"><strong>📐 Terrain:</strong> ${solarScore >= 80 ? 'Excellent slope & orientation' : solarScore >= 60 ? 'Good terrain conditions' : 'Moderate terrain suitability'}</div>
+                <div style="color:#333; font-size: 11px;"><strong>🏞️ Land Use:</strong> ${suitabilityCategory === 'Excellent' ? 'Ideal for solar development' : 'Suitable for solar installation'}</div>
+              </div>
+              
+              <div style="font-size: 10px; color: #666; margin-top: 10px; border-top: 1px solid #ddd; padding-top: 8px; text-align: center;">
+                📊 <strong>Data Sources:</strong> ECMWF ERA5-Land + ESA WorldCover + USGS SRTM<br/>
+                🌞 <strong>Analysis:</strong> Multi-factor Solar Suitability Index (SSI)<br/>
+                ⏱️ <strong>Updated:</strong> Real-time satellite analysis
               </div>
             </div>
           `;
@@ -748,20 +762,40 @@ export default function Hotspots() {
   };
 
   const analyzeSolar = async () => {
-    if (!aoiPolygon) {
-      alert('Please select an Area of Interest first');
+    if (!mapInstance) {
+      alert('Map not ready for solar analysis');
       return;
     }
     
     setIsAnalyzingSolar(true);
     try {
-      const aoiGeoJSON = convertPolygonToGeoJSON(aoiPolygon);
-      console.log('Sending AOI for solar analysis:', aoiGeoJSON);
+      // Get current map bounds instead of requiring AOI selection
+      const bounds = mapInstance.getBounds();
+      const ne = bounds.getNorthEast();
+      const sw = bounds.getSouthWest();
+      
+      // Create a bounding box GeoJSON from current map view
+      const boundingBoxGeoJSON = {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[
+            [sw.lng(), sw.lat()], // Southwest
+            [ne.lng(), sw.lat()], // Southeast  
+            [ne.lng(), ne.lat()], // Northeast
+            [sw.lng(), ne.lat()], // Northwest
+            [sw.lng(), sw.lat()]  // Close polygon
+          ]]
+        }
+      };
+      
+      console.log('Sending current map bounds for solar analysis:', boundingBoxGeoJSON);
 
       const resp = await fetch('http://localhost:8000/api/solar-analysis/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aoi: aoiGeoJSON })
+        body: JSON.stringify({ aoi: boundingBoxGeoJSON })
       });
       
       if (!resp.ok) {
@@ -775,9 +809,9 @@ export default function Hotspots() {
       
       if (data.success && data.solar_polygons && data.solar_polygons.length > 0) {
         displaySolarPolygons(data.solar_polygons);
-        alert(`✅ Found ${data.solar_polygons.length} suitable solar areas! Total capacity: ${data.summary?.total_estimated_capacity_mw?.toFixed(1)} MW`);
+        alert(`✅ Found ${data.solar_polygons.length} suitable solar areas in current view! Total capacity: ${data.summary?.total_estimated_capacity_mw?.toFixed(1)} MW`);
       } else if (data.success) {
-        alert('✅ Solar analysis completed, but no highly suitable areas found in this region.');
+        alert('✅ Solar analysis completed, but no highly suitable areas found in current map view. Try zooming to a different area.');
       } else {
         alert(`❌ Solar analysis failed: ${data.error || 'Unknown error'}`);
       }
@@ -792,14 +826,14 @@ export default function Hotspots() {
   };
 
   const displaySolarPolygons = (solarPolygons: SolarPolygon[]) => {
-    if (!mapInstance || !mapInstance.data) {
+    if (!mapInstance || !mapInstance.data || !mapsInstance) {
       console.error('Map not ready for solar polygon display');
       return;
     }
 
     console.log('Displaying solar polygons:', solarPolygons.length);
 
-    // Add solar polygons to the map
+    // Add solar polygons to the map WITHOUT clearing existing features
     solarPolygons.forEach((solarPoly, idx) => {
       const feature = {
         type: 'Feature',
@@ -818,31 +852,32 @@ export default function Hotspots() {
 
       try {
         mapInstance.data.addGeoJson(feature);
-        console.log(`✅ Added solar polygon ${idx + 1}`);
+        console.log(`✅ Added solar polygon ${idx + 1} with properties:`, feature.properties);
       } catch (err) {
         console.error(`Error adding solar polygon ${idx + 1}:`, err);
       }
     });
 
-    // Update map styling to handle solar polygons
+    // Update styling - this applies to ALL features on the map
     mapInstance.data.setStyle((feat: any) => {
       const analysisType = feat.getProperty('analysis_type');
       const gapType = feat.getProperty('gap_type');
       
+      console.log('Styling feature:', { analysisType, gapType });
+      
       if (analysisType === 'solar_potential') {
-        // Solar polygon styling - yellow/orange gradient based on score
         const score = feat.getProperty('solar_score') || 0;
-        let fillColor = '#FFC107'; // Default yellow
+        let fillColor = '#FFC107';
         
         if (score >= 80) {
-          fillColor = '#FF8F00'; // Dark orange for excellent
+          fillColor = '#FF8F00';
         } else if (score >= 60) {
-          fillColor = '#FFA000'; // Orange for very good
+          fillColor = '#FFA000';
         } else if (score >= 40) {
-          fillColor = '#FFB300'; // Light orange for good
-        } else {
-          fillColor = '#FFC107'; // Yellow for fair
+          fillColor = '#FFB300';
         }
+        
+        console.log(`Solar polygon styled with color ${fillColor} for score ${score}`);
         
         return {
           fillColor,
@@ -853,7 +888,6 @@ export default function Hotspots() {
           clickable: true
         };
       } else if (gapType === 'service_gap') {
-        // Existing service gap styling
         const needLevel = feat.getProperty('need_level');
         const serviceType = feat.getProperty('service_type');
         
@@ -878,7 +912,6 @@ export default function Hotspots() {
           clickable: true
         };
       } else {
-        // Existing vacant land styling
         const s = feat.getProperty('score') || 0;
         const { fillColor, strokeColor } = getScoreColors(s);
         return {
@@ -891,8 +924,168 @@ export default function Hotspots() {
         };
       }
     });
-  };
 
+    // Clear and re-add unified click listener
+    mapsInstance.event.clearListeners(mapInstance.data, 'click');
+    console.log('🖱️ Adding unified click listener for all features');
+    
+    mapInstance.data.addListener('click', (evt: any) => {
+      console.log('🎯 Feature clicked:', evt);
+      
+      if (!evt || !evt.feature) {
+        console.warn('⚠️ No feature in click event');
+        return;
+      }
+
+      if (!infoWindow) {
+        console.error('❌ InfoWindow not initialized');
+        return;
+      }
+
+      try {
+        const feat = evt.feature;
+        const analysisType = feat.getProperty('analysis_type');
+        const gapType = feat.getProperty('gap_type');
+        
+        console.log('Feature properties:', { analysisType, gapType });
+        
+        if (analysisType === 'solar_potential') {
+          console.log('🌞 Handling solar polygon click');
+          
+          const solarScore = feat.getProperty('solar_score') || 0;
+          const suitabilityCategory = feat.getProperty('suitability_category') || 'Unknown';
+          const areaHectares = feat.getProperty('area_hectares') || 0;
+          const estimatedCapacity = feat.getProperty('estimated_capacity_mw') || 0;
+          const annualGeneration = feat.getProperty('annual_generation_mwh') || 0;
+          const co2Offset = feat.getProperty('co2_offset_tons') || 0;
+          
+          console.log('Solar data:', {
+            solarScore, suitabilityCategory, areaHectares, 
+            estimatedCapacity, annualGeneration, co2Offset
+          });
+
+          const content = `
+            <div style="padding:14px; font-family:Arial, sans-serif; max-width:350px; line-height: 1.4;">
+              <h4 style="margin:0 0 10px 0; color:#FF8F00; font-size: 16px;">
+                ☀️ Solar Generation Potential
+              </h4>
+              
+              <div style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding: 10px; border-radius: 6px; margin: 10px 0; border-left: 4px solid #FF8F00;">
+                <div style="color:#333; font-size: 13px; margin-bottom: 4px;"><strong>Solar Score:</strong> <span style="color:#FF8F00; font-weight: bold;">${solarScore}/100</span></div>
+                <div style="color:#333; font-size: 13px; margin-bottom: 4px;"><strong>Suitability:</strong> <span style="color:#2E7D32; font-weight: bold;">${suitabilityCategory}</span></div>
+                <div style="color:#333; font-size: 13px;"><strong>Area:</strong> ${areaHectares.toFixed(2)} hectares (${(areaHectares * 2.47).toFixed(1)} acres)</div>
+              </div>
+              
+              <div style="background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c8 100%); padding: 10px; border-radius: 6px; margin: 10px 0; border-left: 4px solid #4CAF50;">
+                <h5 style="margin: 0 0 8px 0; color: #2E7D32; font-size: 14px; font-weight: bold;">⚡ Energy Production</h5>
+                <div style="color:#333; font-size: 12px; margin-bottom: 3px;"><strong>🏭 Capacity:</strong> <span style="color:#1976D2; font-weight: bold;">${estimatedCapacity.toFixed(2)} MW</span></div>
+                <div style="color:#333; font-size: 12px; margin-bottom: 3px;"><strong>🔋 Annual Gen:</strong> <span style="color:#1976D2; font-weight: bold;">${annualGeneration.toLocaleString()} MWh</span></div>
+                <div style="color:#333; font-size: 12px; margin-bottom: 3px;"><strong>🏠 Powers:</strong> ~${Math.round(annualGeneration / 11).toLocaleString()} homes/year</div>
+                <div style="color:#333; font-size: 12px; margin-bottom: 3px;"><strong>💰 Revenue:</strong> $${(annualGeneration * 50).toLocaleString()}/year</div>
+                <div style="color:#333; font-size: 12px;"><strong>🌱 CO₂ Offset:</strong> <span style="color:#4CAF50; font-weight: bold;">${co2Offset.toLocaleString()} tons/year</span></div>
+              </div>
+              
+              <div style="font-size: 10px; color: #666; margin-top: 10px; border-top: 1px solid #ddd; padding-top: 8px; text-align: center;">
+                📊 Data: ECMWF ERA5-Land + ESA WorldCover + USGS SRTM
+              </div>
+            </div>
+          `;
+
+          infoWindow.setContent(content);
+          infoWindow.setPosition(evt.latLng);
+          infoWindow.open(mapInstance);
+          console.log('✅ Solar InfoWindow opened');
+
+        } else if (gapType === 'service_gap') {
+          console.log('📍 Handling service gap click');
+          
+          const serviceType = feat.getProperty('service_type');
+          const needLevel = feat.getProperty('need_level');
+          const distance = feat.getProperty('distance');
+          const recommendation = feat.getProperty('recommendation');
+          const areaSize = feat.getProperty('area_size');
+          
+          const serviceIcons: { [key: string]: string } = {
+            parks: '🌳',
+            food: '🛒', 
+            healthcare: '🏥',
+            transport: '🚌'
+          };
+
+          const needLevelColors: { [key: string]: string } = {
+            high: '#FF5722',
+            medium: '#FF9800', 
+            low: '#FFC107'
+          };
+
+          const serviceIcon = serviceIcons[serviceType] || '📍';
+          const needColor = needLevelColors[needLevel] || '#757575';
+
+          const content = `
+            <div style="padding:12px; font-family:Arial, sans-serif; max-width:320px;">
+              <h4 style="margin:0 0 8px 0; color:#2196F3;">
+                ${serviceIcon} Service Gap
+              </h4>
+              
+              <div style="background: #f5f5f5; padding: 8px; border-radius: 4px; margin: 8px 0;">
+                <div style="color:#333;"><strong>Type:</strong> ${serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}</div>
+                <div style="color:#333;"><strong>Need:</strong> 
+                  <span style="color: ${needColor}; font-weight: bold;">${needLevel.toUpperCase()}</span>
+                </div>
+                <div style="color:#333;"><strong>Distance:</strong> ${distance.toFixed(1)} km</div>
+                <div style="color:#333;"><strong>Area:</strong> ${areaSize.toFixed(1)} km²</div>
+              </div>
+              
+              <div style="background: #fff3e0; padding: 8px; border-radius: 4px; margin: 8px 0;">
+                <h5 style="margin: 0 0 6px 0; color: #555; font-size: 12px;">💡 Recommendation</h5>
+                <div style="font-size: 11px; color: #333; line-height: 1.4;">
+                  ${recommendation}
+                </div>
+              </div>
+            </div>
+          `;
+
+          infoWindow.setContent(content);
+          infoWindow.setPosition(evt.latLng);
+          infoWindow.open(mapInstance);
+          console.log('✅ Service Gap InfoWindow opened');
+
+        } else {
+          console.log('🏗️ Handling vacant land click');
+          
+          const area = feat.getProperty('area') || 0;
+          const score = feat.getProperty('score') || 0;
+          const aqi = feat.getProperty('aqi');
+          const popD = feat.getProperty('population_density');
+          const method = feat.getProperty('scoring_method') || 'unknown';
+
+          const scoreCat = getScoreCategory(score);
+
+          const content = `
+            <div style="padding:12px; font-family:Arial, sans-serif; max-width:300px;">
+              <h4 style="margin:0 0 8px 0; color:#2196F3;">🏗️ Vacant Land Hotspot</h4>
+              <div style="color:#333;"><strong>Area:</strong> ${area.toFixed(2)} hectares</div>
+              <div style="color:#333;"><strong>Score:</strong> ${score.toFixed(1)}/100</div>
+              <div><strong>Category:</strong> ${scoreCat}</div>
+              <div style="color:#333;"><strong>Method:</strong> ${method === 'ml_model' ? '🤖 ML Model' : '📏 Rule-based'}</div>
+              ${aqi ? `<div style="color:#333;"><strong>AQI:</strong> ${aqi}</div>` : '<div style="color:#333;"><strong>AQI:</strong> N/A</div>'}
+              ${popD ? `<div style="color:#333;"><strong>Population:</strong> ${popD.toLocaleString()}/km²</div>` : ''}
+            </div>
+          `;
+
+          infoWindow.setContent(content);
+          infoWindow.setPosition(evt.latLng);
+          infoWindow.open(mapInstance);
+          console.log('✅ Vacant Land InfoWindow opened');
+        }
+
+      } catch (err) {
+        console.error('❌ Error in click handler:', err);
+        alert(`InfoWindow error: ${err}`);
+      }
+    });
+  };
+  
   const handleServiceToggle = (service: string) => {
     setSelectedServices(prev => 
       prev.includes(service) 
@@ -1192,14 +1385,14 @@ export default function Hotspots() {
                 <button
                   className={`action-btn ${isAnalyzingSolar ? 'analyzing' : ''}`}
                   onClick={analyzeSolar}
-                  disabled={isAnalyzingSolar || !aoiBounds}
+                  disabled={isAnalyzingSolar || !mapInstance}
                   style={{ 
                     width: '100%', 
                     backgroundColor: '#FF8F00',
                     borderColor: '#FF8F00'
                   }}
                 >
-                  {isAnalyzingSolar ? 'Analyzing Solar...' : 'Analyze Solar Potential'}
+                  {isAnalyzingSolar ? 'Analyzing Solar...' : 'Find Solar Hotspots in View'}
                 </button>
               )}
             </div>

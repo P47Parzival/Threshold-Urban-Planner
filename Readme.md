@@ -42,6 +42,10 @@ Threshold addresses critical urban planning challenges by providing:
     <td><img src="Assests/Screenshot (98).png" width="300"/></td>
     <td><img src="Assests/Screenshot (84).png" width="300"/></td>
   </tr>
+  <tr>
+    <td><img src="Assests/WhatsApp Image 2025-10-05 at 13.01.52_78fbbb39.jpg" width="300"/></td>
+    <td><img src="Assests/Screenshot (104).png" width="300"/></td>
+  </tr>
 </table>
 
 <div align="center">
