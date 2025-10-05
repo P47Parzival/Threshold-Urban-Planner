@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Maps from './Maps';
 import Hotspots from './Hotspots';
+import ThreeDView from './ThreeDView';
 import './Dashboard.css';
 
 interface User {
@@ -10,7 +11,7 @@ interface User {
   profession: string;
 }
 
-type TabType = 'dashboard' | 'maps' | 'hotspots' | 'settings';
+type TabType = 'dashboard' | 'maps' | 'hotspots' | '3dview' | 'settings';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -213,7 +214,7 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container">
       {/* Regular navbar - hidden when on maps tab */}
-      {activeTab !== 'maps' && activeTab !== 'hotspots' && (
+      {activeTab !== 'maps' && activeTab !== 'hotspots' && activeTab !== '3dview' && (
         <nav className="dashboard-nav">
           <div className="nav-brand">
             <h2>THRESHOLD</h2>
@@ -238,6 +239,12 @@ export default function Dashboard() {
             >
               Hotspots
             </button>
+            <button
+              className="tab-btn"
+              onClick={() => setActiveTab('3dview')}
+            >
+              3D View
+            </button>
             <button 
               className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
               onClick={() => setActiveTab('settings')}
@@ -253,7 +260,7 @@ export default function Dashboard() {
       )}
 
       {/* Floating navigation for maps tab */}
-      {(activeTab === 'maps' || activeTab === 'hotspots') && (
+      {(activeTab === 'maps' || activeTab === 'hotspots' || activeTab === '3dview') && (
         <>
           <button 
             className="floating-nav-toggle"
@@ -304,6 +311,15 @@ export default function Dashboard() {
                     Hotspots
                   </button>
                   <button 
+                    className={`floating-tab-btn ${activeTab === '3dview' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('3dview');
+                      setShowFloatingNav(false);
+                    }}
+                  >
+                    3D View
+                  </button>
+                  <button 
                     className="floating-tab-btn"
                     onClick={() => {
                       setActiveTab('settings');
@@ -326,10 +342,11 @@ export default function Dashboard() {
         </>
       )}
 
-      <main className={`dashboard-main ${activeTab === 'maps' || activeTab === 'hotspots' ? 'dashboard-main-fullscreen' : ''}`}>
+      <main className={`dashboard-main ${activeTab === 'maps' || activeTab === 'hotspots' || activeTab === '3dview' ? 'dashboard-main-fullscreen' : ''}`}>
         {activeTab === 'dashboard' && renderDashboardContent()}
         {activeTab === 'maps' && <Maps />}
         {activeTab === 'hotspots' && <Hotspots />}
+        {activeTab === '3dview' && <ThreeDView />}
         {activeTab === 'settings' && renderSettingsContent()}
       </main>
     </div>

@@ -190,7 +190,7 @@ class ServiceAnalysisService:
                     "count": 0
                 })
                 continue
-        
+            
         # Remove duplicates
         unique_places = []
         for lat, lng, name in places:

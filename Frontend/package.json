@@ -12,11 +12,13 @@
   "dependencies": {
     "@splinetool/react-spline": "^4.1.0",
     "@tailwindcss/vite": "^4.1.13",
+    "@types/three": "^0.180.0",
     "google-map-react": "^2.2.5",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^6.28.0",
-    "tailwindcss": "^4.1.13"
+    "tailwindcss": "^4.1.13",
+    "three": "^0.180.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",

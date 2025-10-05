@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Google Maps 3D Street View</title>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDcmtmHLCqgSiB3IwhVNw8_aV639cFgdDE"></script>
+    <style>
+      #map, #pano {
+        height: 100%;
+        width: 50%;
+        float: left;
+      }
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="pano"></div>
+    
+    <script>
+      function initMap() {
+        const location = { lat: 37.4219999, lng: -122.0840575 }; // Google HQ
+
+        const map = new google.maps.Map(document.getElementById("map"), {
+          center: location,
+          zoom: 14,
+          mapTypeId: "satellite", // 3D look
+        });
+
+        const panorama = new google.maps.StreetViewPanorama(
+          document.getElementById("pano"),
+          {
+            position: location,
+            pov: { heading: 34, pitch: 10 },
+            zoom: 1,
+          }
+        );
+
+        map.setStreetView(panorama);
+      }
+
+      window.onload = initMap;
+    </script>
+  </body>
+</html>

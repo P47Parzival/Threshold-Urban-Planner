@@ -44,6 +44,10 @@ Threshold addresses critical urban planning challenges by providing:
   </tr>
 </table>
 
+<div align="center">
+  <img src="Assests/WhatsApp Image 2025-10-05 at 13.01.52_78fbbb39.jpg" width="500"/>
+</div>
+
 ---
 
 ## 🛰️ Satellite Data & Remote Sensing
