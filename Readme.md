@@ -431,7 +431,7 @@ GET /api/aqi/calculate?latitude=23.0225&longitude=72.5714&date=2024-01-15
 ## 🙏 Acknowledgments
 
 - **NASA GIBS** for providing free satellite data access
-- **ESA WorldCover** for high-resolution land cover data
+- **ESA WorldCover** for high-resolution land cover datas
 - **Google Earth Engine** for cloud-based geospatial processing
 - **Open-Meteo** for air quality data API
 - **NASA Space Apps Challenge** for the inspiration and platform
