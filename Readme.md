@@ -1,5 +1,7 @@
 # 🌍 Threshold - Urban Development & Service Gap Analysis Platform
 
+Demo Video = https://www.youtube.com/watch?v=4w99ah-wVQk
+
 **Threshold** is a comprehensive geospatial analysis platform that combines satellite remote sensing, machine learning, and real-time data processing to identify optimal locations for urban development and analyze service accessibility gaps. Built for the NASA Space Apps Challenge, this platform empowers urban planners with data-driven insights for sustainable city development.
 
 ## 🎯 Project Overview
@@ -431,7 +433,7 @@ GET /api/aqi/calculate?latitude=23.0225&longitude=72.5714&date=2024-01-15
 ## 🙏 Acknowledgments
 
 - **NASA GIBS** for providing free satellite data access
-- **ESA WorldCover** for high-resolution land cover data
+- **ESA WorldCover** for high-resolution land cover datas
 - **Google Earth Engine** for cloud-based geospatial processing
 - **Open-Meteo** for air quality data API
 - **NASA Space Apps Challenge** for the inspiration and platform
