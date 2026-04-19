@@ -24,7 +24,7 @@ interface PlacedModel {
 declare global {
   interface Window {
     google: any;
-    initThreeDMap: () => void;
+    initThreeDMap?: () => void;
   }
 }
 
@@ -40,7 +40,7 @@ export default function ThreeDView() {
   const [placementMode, setPlacementMode] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [mapInstance, setMapInstance] = useState<any>(null);
-  const [panoramaInstance, setPanoramaInstance] = useState<any>(null);
+  const [, setPanoramaInstance] = useState<any>(null);
 
   // File handling functions
   const handleFileUpload = useCallback((files: FileList) => {
@@ -207,6 +207,7 @@ export default function ThreeDView() {
         location: location,
         radius: 50
       }, (data: any, status: any) => {
+        void data; // To satisfy TS
         if (status === window.google.maps.StreetViewStatus.OK) {
           // Street View is available, initialize panorama
           const panorama = new window.google.maps.StreetViewPanorama(
@@ -232,7 +233,7 @@ export default function ThreeDView() {
           setPanoramaInstance(panorama);
 
           // Add click listener to Street View for model placement
-          panorama.addListener('click', (event: any) => {
+          panorama.addListener('click', () => {
             if (placementMode && selectedModel) {
               // Get the clicked position in Street View
               const position = panorama.getPosition();
@@ -270,6 +271,7 @@ export default function ThreeDView() {
                 location: clickedLocation,
                 radius: 50
               }, (clickData: any, clickStatus: any) => {
+                void clickData; // To satisfy TS
                 if (clickStatus === window.google.maps.StreetViewStatus.OK) {
                   panorama.setPosition(clickedLocation);
                   setStreetViewError(null);
