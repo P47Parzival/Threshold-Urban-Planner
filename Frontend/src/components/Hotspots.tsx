@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 // @ts-ignore
 import GoogleMapReact from 'google-map-react';
 import './Dashboard.css';
@@ -224,7 +224,7 @@ export default function Hotspots() {
       
       // Remove housing polygons from map but keep service markers
       if (mapInstance && mapInstance.data) {
-        const features = [];
+        const features: any[] = [];
         mapInstance.data.forEach((feat: any) => {
           if (feat.getProperty('gap_type') !== 'service_gap') {
             features.push(feat);
@@ -377,7 +377,7 @@ export default function Hotspots() {
         });
 
         const scoreCat = getScoreCategory(score);
-        const { fillColor } = getScoreColors(score);
+        // const { fillColor } = getScoreColors(score);
 
         // Start with simple content first
         const content = `
@@ -725,7 +725,7 @@ export default function Hotspots() {
           });
 
           const scoreCat = getScoreCategory(score);
-          const { fillColor } = getScoreColors(score);
+          // const { fillColor } = getScoreColors(score);
 
           const content = `
             <div style="padding:12px; font-family:Arial, sans-serif; max-width:300px;">
@@ -1125,7 +1125,7 @@ export default function Hotspots() {
           defaultCenter={defaultProps.center}
           defaultZoom={defaultProps.zoom}
           yesIWantToUseGoogleMapApiInternals
-          onGoogleApiLoaded={({ map, maps }) => handleApiLoaded(map, maps)}
+          onGoogleApiLoaded={({ map, maps }: { map: any; maps: any }) => handleApiLoaded(map, maps)}
           options={{
             styles: [
               {

@@ -25,6 +25,3 @@ dist-ssr
 
 .env
 env
-
-
-src/components/ThreeDView.tsx
